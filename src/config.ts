@@ -1,12 +1,18 @@
+import path from 'node:path';
+
 export interface Config {
-  databaseUrl: string;
+  dbPath: string;
   port: number;
+  host: string;
 }
 
+/** Domyślnie: dane w pliku dane/zge.db obok aplikacji, serwer widoczny tylko z tego komputera. */
 export function loadConfig(env: Record<string, string | undefined>): Config {
-  const databaseUrl = env.DATABASE_URL;
-  if (!databaseUrl) throw new Error('Brak zmiennej DATABASE_URL');
   const port = env.PORT === undefined ? 3000 : Number(env.PORT);
   if (!Number.isInteger(port) || port <= 0) throw new Error(`Nieprawidłowy PORT: ${env.PORT}`);
-  return { databaseUrl, port };
+  return {
+    dbPath: path.resolve(env.DB_PATH ?? 'dane/zge.db'),
+    port,
+    host: env.HOST ?? '127.0.0.1',
+  };
 }

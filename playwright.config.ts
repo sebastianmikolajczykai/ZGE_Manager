@@ -1,7 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
 const PORT = 3100;
-const DATABASE_URL = process.env.E2E_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/zge_test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -17,7 +16,7 @@ export default defineConfig({
   webServer: {
     command: 'npx tsx src/server.ts',
     url: `http://localhost:${PORT}/health`,
-    env: { PORT: String(PORT), DATABASE_URL },
+    env: { PORT: String(PORT), DB_PATH: 'test-results/e2e.db' },
     reuseExistingServer: false,
     timeout: 30_000,
   },

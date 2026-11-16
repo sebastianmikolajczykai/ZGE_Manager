@@ -1,39 +1,36 @@
-import pg from 'pg';
-import { readdir, readFile } from 'node:fs/promises';
+import Database from 'better-sqlite3';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+export type Db = Database.Database;
+
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
-export function createPool(connectionString: string): pg.Pool {
-  return new pg.Pool({ connectionString, max: 5 });
+export function openDb(file: string): Db {
+  mkdirSync(path.dirname(file), { recursive: true });
+  const db = new Database(file);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
+  return db;
 }
 
-/** Applies every migrations/*.sql file once, in name order, each inside a transaction. */
-export async function migrate(pool: pg.Pool): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('SELECT pg_advisory_lock(727001)');
-    await client.query(
-      'CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql')).sort();
-    for (const name of files) {
-      const done = await client.query('SELECT 1 FROM schema_migrations WHERE name = $1', [name]);
-      if (done.rowCount) continue;
-      const sql = await readFile(path.join(MIGRATIONS_DIR, name), 'utf8');
-      await client.query('BEGIN');
-      try {
-        await client.query(sql);
-        await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [name]);
-        await client.query('COMMIT');
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      }
-    }
-  } finally {
-    await client.query('SELECT pg_advisory_unlock(727001)').catch(() => {});
-    client.release();
+/** Applies every migrations/*.sql file once, in name order, each in its own transaction. */
+export function migrate(db: Db): void {
+  db.exec(
+    "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  );
+  const applied = new Set(
+    (db.prepare('SELECT name FROM schema_migrations').all() as { name: string }[]).map((r) => r.name),
+  );
+  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
+  for (const name of files) {
+    if (applied.has(name)) continue;
+    const sql = readFileSync(path.join(MIGRATIONS_DIR, name), 'utf8');
+    db.transaction(() => {
+      db.exec(sql);
+      db.prepare('INSERT INTO schema_migrations (name) VALUES (?)').run(name);
+    })();
   }
 }

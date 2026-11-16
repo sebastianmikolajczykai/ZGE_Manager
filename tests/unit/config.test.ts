@@ -1,21 +1,21 @@
 import { describe, it, expect } from 'vitest';
+import path from 'node:path';
 import { loadConfig } from '../../src/config.js';
 
 describe('loadConfig', () => {
-  it('reads DATABASE_URL and PORT from env', () => {
-    const cfg = loadConfig({ DATABASE_URL: 'postgres://x/y', PORT: '4000' });
-    expect(cfg).toEqual({ databaseUrl: 'postgres://x/y', port: 4000 });
+  it('reads DB_PATH, PORT and HOST from env', () => {
+    const cfg = loadConfig({ DB_PATH: '/data/zge.db', PORT: '4000', HOST: '127.0.0.1' });
+    expect(cfg).toEqual({ dbPath: path.resolve('/data/zge.db'), port: 4000, host: '127.0.0.1' });
   });
 
-  it('defaults PORT to 3000', () => {
-    expect(loadConfig({ DATABASE_URL: 'postgres://x/y' }).port).toBe(3000);
-  });
-
-  it('fails fast when DATABASE_URL is missing', () => {
-    expect(() => loadConfig({})).toThrow(/DATABASE_URL/);
+  it('defaults to a local data file, port 3000 and localhost only', () => {
+    const cfg = loadConfig({});
+    expect(cfg.dbPath).toBe(path.resolve('dane/zge.db'));
+    expect(cfg.port).toBe(3000);
+    expect(cfg.host).toBe('127.0.0.1');
   });
 
   it('rejects a non-numeric PORT', () => {
-    expect(() => loadConfig({ DATABASE_URL: 'postgres://x/y', PORT: 'abc' })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/);
   });
 });
