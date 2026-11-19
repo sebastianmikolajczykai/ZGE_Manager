@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { buildApp } from '../../src/app.js';
 import { AppDatabase } from '../../src/db.js';
 import type { FastifyInstance } from 'fastify';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 describe('AppDatabase + /health', () => {
   let dir: string;
@@ -49,9 +50,14 @@ describe('AppDatabase + /health', () => {
   });
 
   it('applies each migration only once', () => {
+    const count = () =>
+      (db.connection.prepare('SELECT count(*) AS n FROM schema_migrations').get() as { n: number }).n;
+    const files = readdirSync(fileURLToPath(new URL('../../migrations', import.meta.url))).filter((f) =>
+      f.endsWith('.sql'),
+    );
+    expect(count()).toBe(files.length);
     db.migrate();
-    const row = db.connection.prepare('SELECT count(*) AS n FROM schema_migrations').get() as { n: number };
-    expect(row.n).toBe(1);
+    expect(count()).toBe(files.length);
   });
 
   it('keeps data between restarts (data lives in the file)', () => {
