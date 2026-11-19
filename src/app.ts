@@ -1,8 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { Db } from './db.js';
+import type { AppDatabase } from './db.js';
 
 export interface AppDeps {
-  db: Db;
+  db: AppDatabase;
 }
 
 export function buildApp({ db }: AppDeps): FastifyInstance {
@@ -10,7 +10,7 @@ export function buildApp({ db }: AppDeps): FastifyInstance {
 
   app.get('/health', async (_req, reply) => {
     try {
-      db.prepare('SELECT 1').get();
+      db.ping();
       return { status: 'ok', db: 'ok' };
     } catch {
       return reply.code(503).send({ status: 'error', db: 'down' });

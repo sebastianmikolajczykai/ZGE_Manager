@@ -3,34 +3,53 @@ import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-export type Db = Database.Database;
-
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+const BUSY_TIMEOUT_MS = 5000;
 
-export function openDb(file: string): Db {
-  mkdirSync(path.dirname(file), { recursive: true });
-  const db = new Database(file);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 5000');
-  return db;
-}
+/** Plik bazy danych aplikacji (SQLite) wraz z migracjami schematu. */
+export class AppDatabase {
+  private constructor(readonly connection: Database.Database) {}
 
-/** Applies every migrations/*.sql file once, in name order, each in its own transaction. */
-export function migrate(db: Db): void {
-  db.exec(
-    "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))",
-  );
-  const applied = new Set(
-    (db.prepare('SELECT name FROM schema_migrations').all() as { name: string }[]).map((r) => r.name),
-  );
-  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
-  for (const name of files) {
-    if (applied.has(name)) continue;
+  /** Otwiera (lub tworzy) plik bazy, zakładając brakujące foldery. */
+  static open(file: string): AppDatabase {
+    mkdirSync(path.dirname(file), { recursive: true });
+    const connection = new Database(file);
+    connection.pragma('journal_mode = WAL');
+    connection.pragma('foreign_keys = ON');
+    connection.pragma(`busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    return new AppDatabase(connection);
+  }
+
+  /** Stosuje każdy plik migrations/*.sql dokładnie raz, w kolejności nazw, każdy w osobnej transakcji. */
+  migrate(): void {
+    this.connection.exec(
+      "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    );
+    const applied = new Set(
+      (this.connection.prepare('SELECT name FROM schema_migrations').all() as { name: string }[]).map(
+        (r) => r.name,
+      ),
+    );
+    const pending = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql') && !applied.has(f))
+      .sort();
+    for (const name of pending) this.applyMigration(name);
+  }
+
+  /** Rzuca wyjątek, gdy baza nie odpowiada (np. jest zamknięta). */
+  ping(): void {
+    this.connection.prepare('SELECT 1').get();
+  }
+
+  close(): void {
+    this.connection.close();
+  }
+
+  private applyMigration(name: string): void {
     const sql = readFileSync(path.join(MIGRATIONS_DIR, name), 'utf8');
-    db.transaction(() => {
-      db.exec(sql);
-      db.prepare('INSERT INTO schema_migrations (name) VALUES (?)').run(name);
+    this.connection.transaction(() => {
+      this.connection.exec(sql);
+      this.connection.prepare('INSERT INTO schema_migrations (name) VALUES (?)').run(name);
     })();
   }
 }
