@@ -1,0 +1,194 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import type { FastifyInstance } from 'fastify';
+import { AppDatabase } from '../../../src/db.js';
+import { buildApp } from '../../../src/app.js';
+
+const FORM = { 'content-type': 'application/x-www-form-urlencoded' };
+
+describe('web routes', () => {
+  let dir: string;
+  let db: AppDatabase;
+  let app: FastifyInstance;
+  let today: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'zge-'));
+    db = AppDatabase.open(path.join(dir, 'zge.db'));
+    db.migrate();
+    today = '2026-11-16';
+    app = buildApp({ db, today: () => today, defaultPeople: ['Anna', 'Piotr'] });
+  });
+
+  afterEach(async () => {
+    await app.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const createOrder = (fields: Record<string, string> = {}) =>
+    app.inject({
+      method: 'POST',
+      url: '/zlecenia',
+      headers: FORM,
+      payload: new URLSearchParams({
+        clientName: 'Jan Przykładowy',
+        phone: '600 100 200',
+        town: 'Przykładowo',
+        workTypeId: '1',
+        measurementOn: '2026-11-30',
+        person: 'Anna',
+        ...fields,
+      }).toString(),
+    });
+
+  it('board page lists the work type template and the people buttons', async () => {
+    const res = await app.inject({ method: 'GET', url: '/zlecenia/nowe' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Podział nieruchomości');
+    expect(res.body).toContain('Anna');
+  });
+
+  it('creating an order redirects to the board with the order open', async () => {
+    const res = await createOrder();
+    expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toBe('/?zlecenie=1');
+    const board = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(board.body).toContain('Jan Przykładowy');
+    expect(board.body).toContain('Ustalenie terminu pomiaru w terenie');
+  });
+
+  it('invalid data re-shows the form with a readable error and the typed values', async () => {
+    const res = await createOrder({ phone: '123' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Nieprawidłowy numer telefonu');
+    expect(res.body).toContain('value="Jan Przykładowy"');
+  });
+
+  it('escapes HTML typed by users (no script injection)', async () => {
+    await createOrder({ clientName: '<script>alert(1)</script>' });
+    const board = await app.inject({ method: 'GET', url: '/' });
+    expect(board.body).not.toContain('<script>alert(1)</script>');
+    expect(board.body).toContain('&lt;script&gt;');
+  });
+
+  it('ticking a step and undoing it updates the order', async () => {
+    await createOrder();
+    const done = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/kroki/1/zrobione',
+      headers: FORM,
+      payload: 'person=Piotr',
+    });
+    expect(done.statusCode).toBe(303);
+    let page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(page.body).toContain('Analiza materiałów w urzędzie');
+    expect(page.body).toMatch(/Piotr/);
+    await app.inject({ method: 'POST', url: '/zlecenia/1/cofnij', headers: FORM, payload: 'person=Anna' });
+    page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(page.body).toContain('cofnięcie');
+  });
+
+  it('refuses a form sent from another website (CSRF protection)', async () => {
+    await createOrder();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/kroki/1/zrobione',
+      headers: { ...FORM, origin: 'https://zla-strona.example', host: 'localhost:3000' },
+      payload: 'person=Anna',
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('an action on a step that is not active shows an error instead of crashing', async () => {
+    await createOrder();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/kroki/5/zrobione',
+      headers: FORM,
+      payload: 'person=Anna',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('nie jest aktywny');
+  });
+
+  it('unknown order shows 404', async () => {
+    const res = await app.inject({ method: 'GET', url: '/?zlecenie=999' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('settings: adds and removes a person', async () => {
+    await app.inject({ method: 'POST', url: '/ustawienia/osoby', headers: FORM, payload: 'name=Ewa' });
+    let page = await app.inject({ method: 'GET', url: '/ustawienia' });
+    expect(page.body).toContain('Ewa');
+    await app.inject({ method: 'POST', url: '/ustawienia/osoby/3/usun', headers: FORM, payload: '' });
+    page = await app.inject({ method: 'GET', url: '/ustawienia' });
+    expect(page.body).not.toContain('Ewa');
+  });
+
+  it('price typed with a comma and spaces is understood (2 500,50 → 2500,50 zł)', async () => {
+    await createOrder({ pricePln: '2 500,50' });
+    const page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(page.body).toContain('2500,50 zł');
+  });
+
+  it('daily step: "Sprawdzone dziś" is recorded and shown', async () => {
+    await createOrder();
+    for (const position of [1, 2, 3, 4]) {
+      await app.inject({
+        method: 'POST',
+        url: `/zlecenia/1/kroki/${position}/zrobione`,
+        headers: FORM,
+        payload: 'person=Anna',
+      });
+    }
+    let page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(page.body).toContain('Sprawdzone dziś: Piotr');
+    await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/kroki/5/sprawdzone',
+      headers: FORM,
+      payload: 'person=Piotr',
+    });
+    page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(page.body).toContain('ostatnio sprawdzone 16.11.2026, Piotr');
+  });
+
+  it('a finished order disappears from the board but its card and history stay available', async () => {
+    await createOrder();
+    for (let position = 1; position <= 13; position++) {
+      await app.inject({
+        method: 'POST',
+        url: `/zlecenia/1/kroki/${position}/zrobione`,
+        headers: FORM,
+        payload: 'person=Anna',
+      });
+    }
+    const board = await app.inject({ method: 'GET', url: '/' });
+    expect(board.body).toContain('Brak aktywnych zleceń');
+    const card = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(card.body).toContain('Zlecenie zakończone');
+    expect(card.body).toContain('Anna: zrobione „Zapłata”');
+  });
+
+  it('settings: a duplicate person shows a readable error', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/ustawienia/osoby',
+      headers: FORM,
+      payload: 'name=anna',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('już jest na liście');
+  });
+
+  it('without any people the card asks to add them in settings', async () => {
+    await createOrder();
+    await app.inject({ method: 'POST', url: '/ustawienia/osoby/1/usun', headers: FORM, payload: '' });
+    await app.inject({ method: 'POST', url: '/ustawienia/osoby/2/usun', headers: FORM, payload: '' });
+    const page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(page.body).toContain('Dodaj osoby w Ustawieniach');
+  });
+});

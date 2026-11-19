@@ -64,13 +64,32 @@ export class UrgencyRules {
     const limitOverdue = daysToLimit === null ? 0 : 1 - daysToLimit;
     const daysOverdue = Math.max(0, idleOverdue, limitOverdue);
 
+    const dayBeforeLimit = daysToLimit === 1;
+    const idleWarning = idleRules && idle >= this.settings.yellowAfterIdleDays;
+    return this.fromOverdue(daysOverdue, dayBeforeLimit || idleWarning);
+  }
+
+  /**
+   * Krok „sprawdzaj codziennie”: dzień ostatniej kontroli = dzień 0,
+   * następny dzień roboczy bez kontroli = żółty, kolejny = czerwony.
+   */
+  evaluateDaily(lastCheckedOrStartedOn: LocalDate, today: LocalDate): Urgency {
+    const idle = this.counter.daysBetween(lastCheckedOrStartedOn, today);
+    return this.fromOverdue(idle - 1, idle === 1);
+  }
+
+  /** Krok w ustalonym dniu (np. pomiar): przed terminem zielony, w dniu terminu żółty, po nim czerwony. */
+  evaluateScheduled(scheduledOn: LocalDate, today: LocalDate): Urgency {
+    if (today < scheduledOn) return { colour: 'green', daysOverdue: 0, blink: false };
+    const daysAfter = this.counter.daysBetween(scheduledOn, today);
+    return this.fromOverdue(daysAfter, daysAfter === 0);
+  }
+
+  private fromOverdue(daysOverdue: number, warning: boolean): Urgency {
     if (daysOverdue > 0) {
       return { colour: 'red', daysOverdue, blink: daysOverdue > this.settings.blinkAfterRedDays };
     }
-    const dayBeforeLimit = daysToLimit === 1;
-    const idleWarning = idleRules && idle >= this.settings.yellowAfterIdleDays;
-    const colour: Colour = dayBeforeLimit || idleWarning ? 'yellow' : 'green';
-    return { colour, daysOverdue: 0, blink: false };
+    return { colour: warning ? 'yellow' : 'green', daysOverdue: 0, blink: false };
   }
 
   private validateStep(step: StepState): void {

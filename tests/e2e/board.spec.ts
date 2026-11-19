@@ -1,0 +1,44 @@
+import { test, expect } from '@playwright/test';
+
+test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie, historia', async ({ page }) => {
+  const client = `Klient E2E ${Date.now()}`;
+  await page.goto('/');
+  await page.getByRole('link', { name: '+ Dodaj zlecenie' }).click();
+
+  await page.getByLabel('Klient').fill(client);
+  await page.getByLabel('Telefon').fill('600 100 200');
+  await page.getByLabel('Miejscowość').fill('Przykładowo');
+  await page.getByLabel('Rodzaj pracy').selectOption({ label: 'Podział nieruchomości' });
+  await page.getByLabel('Data pomiaru').fill('2030-01-15');
+  await page.getByLabel('Kto przyjął').selectOption('Łukasz');
+  await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+
+  const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
+  await expect(panel.getByRole('heading', { name: client })).toBeVisible();
+  await expect(panel.getByText('Ustalenie terminu pomiaru w terenie')).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(client) })).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Zrobione: Bartek' }).click();
+  await expect(panel.getByText('Bartek: zrobione „Ustalenie terminu pomiaru w terenie”')).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
+    'Analiza materiałów w urzędzie',
+  );
+
+  await panel.getByText('Cofnij ostatnie odhaczenie (pomyłka)').click();
+  await panel.getByRole('button', { name: 'Cofnij: Marcelina' }).click();
+  await expect(panel.getByText('Marcelina: cofnięcie „Ustalenie terminu pomiaru w terenie”')).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
+    'Ustalenie terminu pomiaru w terenie',
+  );
+});
+
+test('formularz pokazuje czytelny błąd przy złym telefonie', async ({ page }) => {
+  await page.goto('/zlecenia/nowe');
+  await page.getByLabel('Klient').fill('Ktoś');
+  await page.getByLabel('Telefon').fill('123');
+  await page.getByLabel('Miejscowość').fill('Gdzieś');
+  await page.getByLabel('Data pomiaru').fill('2030-01-15');
+  await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+  await expect(page.getByRole('alert')).toContainText('Nieprawidłowy numer telefonu');
+  await expect(page.getByLabel('Klient')).toHaveValue('Ktoś');
+});
