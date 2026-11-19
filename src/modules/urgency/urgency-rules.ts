@@ -22,7 +22,7 @@ export const DEFAULT_URGENCY_SETTINGS: UrgencySettings = {
 
 export interface StepState {
   kind: StepKind;
-  /** Ile dni może trwać krok; null = bez limitu. */
+  /** Ile dni może trwać krok; null = bez limitu. Dzień startu = dzień 0, czerwone w dniu N, żółte w dniu N-1. */
   limitDays: number | null;
   startedOn: LocalDate;
   /** Ostatnie odhaczenie (ruch) w sprawie. */
@@ -57,24 +57,25 @@ export class UrgencyRules {
     this.validateStep(step);
     const idle = this.counter.daysBetween(step.lastActivityOn, today);
     const elapsed = this.counter.daysBetween(step.startedOn, today);
-    const overLimit = step.limitDays === null ? null : elapsed - step.limitDays;
+    const daysToLimit = step.limitDays === null ? null : step.limitDays - elapsed;
 
     const idleRules = step.kind === 'own';
     const idleOverdue = idleRules ? idle - this.settings.redAfterIdleDays + 1 : 0;
-    const daysOverdue = Math.max(0, idleOverdue, overLimit ?? 0);
+    const limitOverdue = daysToLimit === null ? 0 : 1 - daysToLimit;
+    const daysOverdue = Math.max(0, idleOverdue, limitOverdue);
 
     if (daysOverdue > 0) {
       return { colour: 'red', daysOverdue, blink: daysOverdue > this.settings.blinkAfterRedDays };
     }
-    const lastDayOfLimit = overLimit === 0;
+    const dayBeforeLimit = daysToLimit === 1;
     const idleWarning = idleRules && idle >= this.settings.yellowAfterIdleDays;
-    const colour: Colour = lastDayOfLimit || idleWarning ? 'yellow' : 'green';
+    const colour: Colour = dayBeforeLimit || idleWarning ? 'yellow' : 'green';
     return { colour, daysOverdue: 0, blink: false };
   }
 
   private validateStep(step: StepState): void {
-    if (step.limitDays !== null && (!Number.isInteger(step.limitDays) || step.limitDays < 0)) {
-      throw new Error(`Limit kroku musi być nieujemną liczbą całkowitą (jest ${step.limitDays})`);
+    if (step.limitDays !== null && (!Number.isInteger(step.limitDays) || step.limitDays < 1)) {
+      throw new Error(`Limit kroku musi być liczbą całkowitą co najmniej 1 (jest ${step.limitDays})`);
     }
     // Rzuca błąd, gdy ostatni ruch jest wcześniejszy niż start kroku.
     this.counter.daysBetween(step.startedOn, step.lastActivityOn);

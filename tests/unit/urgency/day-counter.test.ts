@@ -22,8 +22,8 @@ describe('DayCounter (working days, Mon–Fri)', () => {
   });
 
   it('handles month and year boundaries', () => {
-    // Wed 30.12.2026 → Mon 4.01.2027: Thu, Fri, Mon
-    expect(working.daysBetween('2026-12-30', '2027-01-04')).toBe(3);
+    // Wed 30.12.2026 → Mon 4.01.2027: Thu 31.12, (Fri 1.01 = Nowy Rok), Mon 4.01
+    expect(working.daysBetween('2026-12-30', '2027-01-04')).toBe(2);
   });
 
   it('is not affected by the DST change (last Sunday of March)', () => {
@@ -38,6 +38,48 @@ describe('DayCounter (working days, Mon–Fri)', () => {
   it('rejects a malformed date', () => {
     expect(() => working.daysBetween('16.11.2026', '2026-11-18')).toThrow(/Nieprawidłowa data/);
     expect(() => working.daysBetween('2026-02-30', '2026-03-02')).toThrow(/Nieprawidłowa data/);
+  });
+});
+
+describe('DayCounter (working days skip Polish public holidays)', () => {
+  const working = new DayCounter('working');
+
+  it('skips 11 November (Wed 2026)', () => {
+    // Tue 10.11 → Thu 12.11: only Thu counts
+    expect(working.daysBetween('2026-11-10', '2026-11-12')).toBe(1);
+  });
+
+  it('skips Christmas Eve, Christmas and Boxing Day', () => {
+    // Wed 23.12.2026 → Mon 28.12.2026: 24 (Thu), 25 (Fri) holidays, weekend, Mon counts
+    expect(working.daysBetween('2026-12-23', '2026-12-28')).toBe(1);
+  });
+
+  it('skips New Year and Epiphany', () => {
+    // Wed 31.12.2025 → Wed 7.01.2026: 1.01 Thu hol., 2.01 Fri, 5.01 Mon, 6.01 Tue hol., 7.01 Wed
+    expect(working.daysBetween('2025-12-31', '2026-01-07')).toBe(3);
+  });
+
+  it('skips Easter Monday (moving date: 29.03.2027)', () => {
+    // Fri 26.03.2027 → Tue 30.03.2027: Mon is Easter Monday, only Tue counts
+    expect(working.daysBetween('2027-03-26', '2027-03-30')).toBe(1);
+  });
+
+  it('skips Corpus Christi (Easter + 60 days: 4.06.2026)', () => {
+    // Wed 3.06 → Fri 5.06: Thu is Corpus Christi, only Fri counts
+    expect(working.daysBetween('2026-06-03', '2026-06-05')).toBe(1);
+  });
+
+  it('skips 1 and 3 May and 15 August', () => {
+    // Thu 30.04.2026 → Mon 4.05.2026: 1.05 Fri hol., weekend (3.05 Sun), Mon counts
+    expect(working.daysBetween('2026-04-30', '2026-05-04')).toBe(1);
+    // Thu 14.08.2025 → Mon 18.08.2025: 15.08 Fri hol.
+    expect(working.daysBetween('2025-08-14', '2025-08-18')).toBe(1);
+  });
+
+  it('knows whether a single date is a working day', () => {
+    expect(working.isWorkingDay('2026-11-11')).toBe(false);
+    expect(working.isWorkingDay('2026-11-21')).toBe(false);
+    expect(working.isWorkingDay('2026-11-19')).toBe(true);
   });
 });
 
