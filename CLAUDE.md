@@ -2,7 +2,7 @@
 
 ## Ten projekt
 
-- **Co:** ZGE Menedżer, „żywa lista zleceń” dla firmy geodezyjnej ZGE (klient: Łukasz Pachota). Kroki na rodzaj pracy, limity dni, kolory pilności, oferty, płatności, historia „kto, co, kiedy”.
+- **Co:** ZGE Menedżer, „żywa lista zleceń” dla firmy geodezyjnej ZGE. Kroki na rodzaj pracy, limity dni, kolory pilności, oferty, płatności, historia „kto, co, kiedy”.
 - **Gdzie działa:** lokalnie na laptopie klienta (Windows, przeglądarka). Dane w pliku SQLite `dane/zge.db`, serwer tylko na `127.0.0.1`. Dane klientów nie wychodzą do internetu. Bez logowania (jeden komputer).
 - **Stos:** TypeScript (strict), Fastify, better-sqlite3, Vitest (unit, integracja, pokrycie), Playwright (E2E), ESLint, Prettier, GitHub Actions (Linux + Windows).
 - **Komendy:** `npm run ci` (format, lint, typy, testy z pokryciem), `npm run test:e2e`, `npm test` (wszystko).
