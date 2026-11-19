@@ -21,7 +21,11 @@ export function layout(title: string, body: SafeHtml): string {
       </head>
       <body>
         <header class="top">
-          <div class="brand"><span class="logo">Geodezja-ZGE</span><span class="app">ZGE Menedżer</span></div>
+          <div class="brand">
+            <span class="logo" role="img" aria-label="Geodezja-ZGE"
+              ><span class="logo-top">GEODEZJA</span><span class="logo-zge">ZGE</span></span
+            ><span class="app">ZGE Menedżer</span>
+          </div>
           <nav>
             <a href="/">Tablica</a><a class="primary" href="/zlecenia/nowe">+ Dodaj zlecenie</a
             ><a href="/ustawienia">Ustawienia</a>
@@ -288,14 +292,18 @@ setInterval(function () {
 }, ${REFRESH_SECONDS * 1000});`;
 
 const STYLES = `
-:root { --ink:#1d2733; --muted:#5b6876; --line:#d7dde4; --bg:#f4f6f8; --brand:#1f4e79;
+:root { --ink:#1d2733; --muted:#5b6876; --line:#d7dde4; --bg:#f4f6f8; --brand:#189400; --brand-light:#24b109; --header:#000;
   --green:#e3f3e6; --green-ink:#1e6b34; --yellow:#fff1bf; --yellow-ink:#7a5a00; --red:#fbd9d7; --red-ink:#a3201a; }
 * { box-sizing:border-box; }
 body { margin:0; font:18px/1.4 system-ui, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
-.top { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:var(--brand); color:#fff; }
-.brand .logo { font-weight:700; font-size:22px; margin-right:12px; } .brand .app { opacity:.85; }
-nav a { color:#fff; margin-left:16px; text-decoration:none; font-weight:600; }
-nav a.primary { background:#fff; color:var(--brand); padding:6px 12px; border-radius:6px; }
+/* Kolory i znak firmowy jak na geodezja-zge.pl: czarny pasek, zielone akcenty, logo w ramce. */
+.top { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:var(--header); color:#fff; }
+.brand { display:flex; align-items:center; }
+.logo { display:inline-grid; border:2px solid #fff; padding:2px 8px 4px; margin-right:16px; line-height:1; font-weight:700; letter-spacing:.04em; }
+.logo-top { font-size:15px; text-align:right; } .logo-zge { font-size:22px; border:2px solid #fff; padding:1px 4px; justify-self:start; margin-top:-2px; }
+.brand .app { font-size:20px; font-weight:600; }
+nav a { color:var(--brand-light); margin-left:18px; text-decoration:none; font-weight:700; text-transform:uppercase; font-size:16px; }
+nav a.primary { background:var(--brand); color:#fff; padding:8px 14px; border-radius:6px; }
 main { padding:16px 20px; }
 .split { display:grid; grid-template-columns: 3fr 2fr; gap:16px; align-items:start; }
 table { width:100%; border-collapse:collapse; background:#fff; }
@@ -304,7 +312,7 @@ th { background:#e9edf1; font-size:15px; text-transform:uppercase; letter-spacin
 tbody tr { cursor:pointer; } td a { color:inherit; font-weight:700; text-decoration:none; }
 td.num { text-align:right; white-space:nowrap; }
 .c-green { background:var(--green); } .c-yellow { background:var(--yellow); } .c-red { background:var(--red); color:var(--red-ink); }
-.selected td { box-shadow: inset 0 3px 0 var(--brand), inset 0 -3px 0 var(--brand); }
+.selected td { box-shadow: inset 0 3px 0 var(--header), inset 0 -3px 0 var(--header); }
 .blink { animation: blink 1s steps(2, start) infinite; } @keyframes blink { to { background:#fff; } }
 .detail { background:#fff; padding:16px 20px; border:1px solid var(--line); border-radius:8px; position:sticky; top:12px; }
 .detail.placeholder { color:var(--muted); }
@@ -315,7 +323,7 @@ dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; } dt { color:va
 .actions { margin:6px 0 10px; }
 form.people { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; }
 button { font:inherit; border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
-button.primary { background:var(--brand); color:#fff; } button.secondary { background:#dfe8f1; color:var(--brand); }
+button.primary { background:var(--brand); color:#fff; } button.secondary { background:#e3f3e6; color:#14610a; }
 button.danger { background:var(--red); color:var(--red-ink); } button.small { padding:4px 8px; font-size:14px; }
 button.big { font-size:20px; padding:12px 20px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
