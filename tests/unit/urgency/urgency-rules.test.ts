@@ -34,22 +34,35 @@ describe('UrgencyRules: own step, idle thresholds (2 yellow / 3 red)', () => {
   });
 });
 
-describe('UrgencyRules: step limit', () => {
-  it('is yellow on the last day of the limit', () => {
-    const step = ownStep({ limitDays: 5, startedOn: '2026-11-01', lastActivityOn: '2026-11-05' });
-    expect(rules.evaluate(step, '2026-11-06').colour).toBe('yellow');
+describe('UrgencyRules: step limit (tick day = day 0, yellow on day N-1, red on day N)', () => {
+  const limited = (limitDays: number, today: string) =>
+    rules.evaluate(ownStep({ limitDays, startedOn: '2026-11-01', lastActivityOn: today }), today);
+
+  it.each([
+    [2, '2026-11-01', 'green'],
+    [2, '2026-11-02', 'yellow'],
+    [2, '2026-11-03', 'red'],
+    [5, '2026-11-04', 'green'],
+    [5, '2026-11-05', 'yellow'],
+    [5, '2026-11-06', 'red'],
+    [1, '2026-11-01', 'yellow'],
+    [1, '2026-11-02', 'red'],
+  ])('limit %i days, on %s → %s', (limitDays, today, colour) => {
+    expect(limited(limitDays, today).colour).toBe(colour);
   });
 
-  it('is red the day after the limit even with recent activity', () => {
+  it('counts days overdue from the first red day', () => {
+    expect(limited(5, '2026-11-06').daysOverdue).toBe(1);
+    expect(limited(5, '2026-11-08').daysOverdue).toBe(3);
+  });
+
+  it('red at the limit even with a recent tick', () => {
     const step = ownStep({ limitDays: 5, startedOn: '2026-11-01', lastActivityOn: '2026-11-06' });
-    const result = rules.evaluate(step, '2026-11-07');
-    expect(result.colour).toBe('red');
-    expect(result.daysOverdue).toBe(1);
+    expect(rules.evaluate(step, '2026-11-06').colour).toBe('red');
   });
 
   it('the earlier trigger wins: idle red before the limit ends', () => {
-    const step = ownStep({ limitDays: 10 });
-    expect(rules.evaluate(step, '2026-11-04').colour).toBe('red');
+    expect(rules.evaluate(ownStep({ limitDays: 10 }), '2026-11-04').colour).toBe('red');
   });
 });
 
@@ -60,9 +73,9 @@ describe('UrgencyRules: waiting step (urząd / klient)', () => {
     expect(waiting('2026-11-10').colour).toBe('green');
   });
 
-  it('is yellow on the last day and red after its own limit', () => {
-    expect(waiting('2026-11-15').colour).toBe('yellow');
-    expect(waiting('2026-11-16').colour).toBe('red');
+  it('is yellow the day before and red on the day its own limit is reached', () => {
+    expect(waiting('2026-11-14').colour).toBe('yellow');
+    expect(waiting('2026-11-15').colour).toBe('red');
   });
 
   it('without a limit it never turns red', () => {
@@ -103,8 +116,8 @@ describe('UrgencyRules: rejecting bad input', () => {
     ).toThrow(/żółt/);
   });
 
-  it('rejects a negative step limit', () => {
-    expect(() => rules.evaluate(ownStep({ limitDays: -2 }), '2026-11-02')).toThrow(/limit/i);
+  it.each([-2, 0, 1.5])('rejects a step limit of %s (must be a whole number ≥ 1)', (limitDays) => {
+    expect(() => rules.evaluate(ownStep({ limitDays }), '2026-11-02')).toThrow(/limit/i);
   });
 
   it('rejects activity dated before the step started', () => {

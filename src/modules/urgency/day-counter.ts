@@ -1,4 +1,6 @@
-/** Sposób liczenia dni: robocze (pn–pt) albo wszystkie kalendarzowe. */
+import { PolishHolidays } from './polish-holidays.js';
+
+/** Sposób liczenia dni: robocze (pn–pt bez świąt) albo wszystkie kalendarzowe. */
 export type DayMode = 'working' | 'calendar';
 
 /** Data bez godziny w formacie RRRR-MM-DD (np. 2026-11-19). */
@@ -11,7 +13,15 @@ const SUNDAY = 0;
 
 /** Liczy dni między datami. Działa na datach bez godzin, więc zmiana czasu nie ma wpływu. */
 export class DayCounter {
-  constructor(private readonly mode: DayMode) {}
+  constructor(
+    private readonly mode: DayMode,
+    private readonly holidays: PolishHolidays = new PolishHolidays(),
+  ) {}
+
+  /** Czy w danym dniu się pracuje (w trybie kalendarzowym: zawsze tak). */
+  isWorkingDay(date: LocalDate): boolean {
+    return this.mode === 'calendar' || this.isWorkingEpochDay(toEpochDay(date));
+  }
 
   /** Liczba dni w przedziale (from, to]: dzień startu się nie liczy, dzień końcowy tak. */
   daysBetween(from: LocalDate, to: LocalDate): number {
@@ -20,8 +30,12 @@ export class DayCounter {
     if (end < start) throw new Error(`Data ${to} jest wcześniejsza niż ${from}`);
     if (this.mode === 'calendar') return end - start;
     let count = 0;
-    for (let day = start + 1; day <= end; day++) if (isWeekday(day)) count++;
+    for (let day = start + 1; day <= end; day++) if (this.isWorkingEpochDay(day)) count++;
     return count;
+  }
+
+  private isWorkingEpochDay(epochDay: number): boolean {
+    return isWeekday(epochDay) && !this.holidays.isHoliday(toIsoDate(epochDay));
   }
 }
 
@@ -35,6 +49,10 @@ function toEpochDay(date: LocalDate): number {
     throw new Error(`Nieprawidłowa data: ${date}`);
   }
   return ms / MS_PER_DAY;
+}
+
+function toIsoDate(epochDay: number): LocalDate {
+  return new Date(epochDay * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
 function isWeekday(epochDay: number): boolean {
