@@ -1,0 +1,22 @@
+# Demo ZGE Menedżera na Renderze (zmyślone zlecenia, dane kasowane przy każdym restarcie).
+# Prawdziwa aplikacja działa lokalnie na laptopie klienta, nie tutaj.
+services:
+  - type: web
+    name: zge-menedzer-demo
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci
+    startCommand: npx tsx src/server.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: HOST
+        value: 0.0.0.0
+      - key: DB_PATH
+        value: /tmp/zge-demo/zge.db
+      - key: ZGE_DEMO
+        value: '1'
