@@ -156,3 +156,37 @@ describe('UrgencyRules.compare: board order', () => {
     expect([newer, older].sort(UrgencyRules.compare)).toEqual([older, newer]);
   });
 });
+
+describe('UrgencyRules.evaluateDaily: "check every day" steps', () => {
+  it.each([
+    ['2026-11-02', 'green', 0],
+    ['2026-11-03', 'yellow', 0],
+    ['2026-11-04', 'red', 1],
+    ['2026-11-06', 'red', 3],
+  ])('last checked 2026-11-02, on %s → %s (%i days overdue)', (today, colour, daysOverdue) => {
+    expect(rules.evaluateDaily('2026-11-02', today)).toMatchObject({ colour, daysOverdue });
+  });
+
+  it('blinks after more than 7 red days', () => {
+    expect(rules.evaluateDaily('2026-11-01', '2026-11-10').blink).toBe(true);
+  });
+});
+
+describe('UrgencyRules.evaluateScheduled: step on a fixed date (field measurement)', () => {
+  it.each([
+    ['2026-11-19', 'green', 0],
+    ['2026-11-20', 'yellow', 0],
+    ['2026-11-21', 'red', 1],
+  ])('measurement on 2026-11-20, on %s → %s', (today, colour, daysOverdue) => {
+    expect(rules.evaluateScheduled('2026-11-20', today)).toMatchObject({ colour, daysOverdue });
+  });
+
+  it('counts only working days after the date (working-day rules)', () => {
+    const working = new UrgencyRules(DEFAULT_URGENCY_SETTINGS);
+    // pomiar w piątek 20.11, poniedziałek 23.11 = 1 dzień po terminie
+    expect(working.evaluateScheduled('2026-11-20', '2026-11-23')).toMatchObject({
+      colour: 'red',
+      daysOverdue: 1,
+    });
+  });
+});

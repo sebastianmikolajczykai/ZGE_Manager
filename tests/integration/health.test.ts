@@ -73,11 +73,13 @@ describe('start page', () => {
   it('serves Polish HTML titled ZGE Menedżer', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'zge-'));
     const db = AppDatabase.open(path.join(dir, 'zge.db'));
+    db.migrate();
     const app = buildApp({ db });
     const res = await app.inject({ method: 'GET', url: '/' });
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('<html lang="pl">');
     expect(res.body).toContain('<title>ZGE Menedżer</title>');
+    expect(res.body).toContain('Brak aktywnych zleceń');
     await app.close();
     db.close();
     rmSync(dir, { recursive: true, force: true });

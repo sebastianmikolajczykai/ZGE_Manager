@@ -1,0 +1,142 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { BoardService } from '../modules/board/board-service.js';
+import type { OrderService } from '../modules/orders/order-service.js';
+import type { OrderInput } from '../modules/orders/order-input.js';
+import type { PeopleRepository } from '../modules/people/people-repository.js';
+import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
+import type { LocalDate } from '../modules/urgency/day-counter.js';
+import type { SafeHtml } from './html.js';
+import { boardPage, layout, orderDetail, orderForm, settingsPage, type OrderFormValues } from './views.js';
+
+export interface WebServices {
+  orders: OrderService;
+  board: BoardService;
+  people: PeopleRepository;
+  workTypes: WorkTypeRepository;
+  today: () => LocalDate;
+}
+
+type Form = Record<string, string>;
+const HTTP_SEE_OTHER = 303;
+const HTTP_BAD_REQUEST = 400;
+const HTTP_FORBIDDEN = 403;
+const HTTP_NOT_FOUND = 404;
+
+/** Ekrany aplikacji: tablica z kartą zlecenia, formularz nowego zlecenia, ustawienia. */
+export function registerRoutes(app: FastifyInstance, s: WebServices): void {
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {
+    done(null, Object.fromEntries(new URLSearchParams(String(body))));
+  });
+  app.addHook('preHandler', rejectForeignOrigin);
+
+  app.get('/', (req, reply) => {
+    const id = Number((req.query as Form).zlecenie);
+    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null);
+  });
+
+  app.get('/zlecenia/nowe', (_req, reply) =>
+    sendPage(reply, 'Nowe zlecenie', orderForm(s.workTypes.findAll(), s.people.list(), {}, null)),
+  );
+
+  app.post('/zlecenia', (req, reply) => {
+    const form = req.body as Form;
+    try {
+      const id = s.orders.create(toOrderInput(form), form.person ?? '');
+      return reply.redirect(`/?zlecenie=${id}`, HTTP_SEE_OTHER);
+    } catch (err) {
+      return sendPage(
+        reply,
+        'Nowe zlecenie',
+        orderForm(s.workTypes.findAll(), s.people.list(), form as OrderFormValues, message(err)),
+        HTTP_BAD_REQUEST,
+      );
+    }
+  });
+
+  const orderAction = (path: string, act: (orderId: number, position: number, person: string) => void) =>
+    app.post(path, (req, reply) => {
+      const params = req.params as Form;
+      const orderId = Number(params.id);
+      try {
+        act(orderId, Number(params.position), (req.body as Form).person ?? '');
+        return reply.redirect(`/?zlecenie=${orderId}`, HTTP_SEE_OTHER);
+      } catch (err) {
+        return renderBoard(reply, s, orderId, message(err), HTTP_BAD_REQUEST);
+      }
+    });
+  orderAction('/zlecenia/:id/kroki/:position/zrobione', (o, p, who) => s.orders.completeStep(o, p, who));
+  orderAction('/zlecenia/:id/kroki/:position/sprawdzone', (o, p, who) => s.orders.checkToday(o, p, who));
+  orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
+
+  app.get('/ustawienia', (_req, reply) => sendPage(reply, 'Ustawienia', settingsPage(s.people.list(), null)));
+  app.post('/ustawienia/osoby', (req, reply) => {
+    try {
+      s.people.add((req.body as Form).name ?? '');
+      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+    } catch (err) {
+      return sendPage(reply, 'Ustawienia', settingsPage(s.people.list(), message(err)), HTTP_BAD_REQUEST);
+    }
+  });
+  app.post('/ustawienia/osoby/:id/usun', (req, reply) => {
+    s.people.remove(Number((req.params as Form).id));
+    return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+  });
+}
+
+function renderBoard(
+  reply: FastifyReply,
+  s: WebServices,
+  orderId: number | null,
+  error: string | null,
+  status = 200,
+) {
+  let detail = null;
+  if (orderId !== null) {
+    const order = s.orders.get(orderId);
+    if (!order)
+      return sendPage(
+        reply,
+        'Nie znaleziono',
+        boardPage(s.board.rows(), null, `Nie ma zlecenia o numerze ${orderId}`),
+        HTTP_NOT_FOUND,
+      );
+    const active = order.steps.find((st) => st.status === 'active');
+    const urgency = active ? s.board.urgencyOf(order, active, s.today()) : null;
+    const workType = s.workTypes.findById(order.workTypeId)?.name ?? '?';
+    detail = orderDetail(order, workType, urgency, s.orders.history(orderId), s.people.list());
+  }
+  return sendPage(reply, 'ZGE Menedżer', boardPage(s.board.rows(), detail, error, orderId), status);
+}
+
+function sendPage(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
+  return reply.code(status).type('text/html; charset=utf-8').send(layout(title, body));
+}
+
+/** Ochrona przed formularzem wysłanym z obcej strony (CSRF): POST tylko z tej samej aplikacji. */
+async function rejectForeignOrigin(req: FastifyRequest, reply: FastifyReply) {
+  if (req.method !== 'POST') return;
+  const origin = req.headers.origin;
+  if (origin && new URL(origin).host !== req.headers.host) {
+    await reply.code(HTTP_FORBIDDEN).send('Odrzucono: formularz z innej strony');
+  }
+}
+
+function toOrderInput(f: Form): OrderInput {
+  const opt = (k: string) => (f[k]?.trim() ? (f[k] as string) : null);
+  const price = opt('pricePln');
+  return {
+    clientName: f.clientName ?? '',
+    phone: f.phone ?? '',
+    town: f.town ?? '',
+    workTypeId: Number(f.workTypeId),
+    plot: opt('plot'),
+    office: opt('office'),
+    pricePln: price === null ? null : Number(price.replace(',', '.').replace(/\s/g, '')),
+    note: opt('note'),
+    measurementOn: opt('measurementOn'),
+  };
+}
+
+function message(err: unknown): string {
+  return err instanceof Error ? err.message : 'Nieznany błąd';
+}

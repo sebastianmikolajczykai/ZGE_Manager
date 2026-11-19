@@ -1,12 +1,38 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AppDatabase } from './db.js';
+import { warsawDate } from './clock.js';
+import type { LocalDate } from './modules/urgency/day-counter.js';
+import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from './modules/urgency/urgency-rules.js';
+import { WorkTypeRepository } from './modules/work-types/work-type-repository.js';
+import { DEFAULT_WORK_TYPES } from './modules/work-types/default-work-types.js';
+import { OrderService } from './modules/orders/order-service.js';
+import { BoardService } from './modules/board/board-service.js';
+import { PeopleRepository } from './modules/people/people-repository.js';
+import { registerRoutes } from './web/routes.js';
+
+/** Osoby wpisywane przy pierwszym uruchomieniu (potem edycja w Ustawieniach). */
+export const DEFAULT_PEOPLE: readonly string[] = ['Łukasz', 'Bartek', 'Marcelina'];
 
 export interface AppDeps {
   db: AppDatabase;
+  today?: () => LocalDate;
+  defaultPeople?: readonly string[];
 }
 
-export function buildApp({ db }: AppDeps): FastifyInstance {
+/** Składa aplikację: wgrywa domyślne dane (tylko raz) i rejestruje ekrany. Baza musi być po migracji. */
+export function buildApp({
+  db,
+  today = () => warsawDate(),
+  defaultPeople = DEFAULT_PEOPLE,
+}: AppDeps): FastifyInstance {
   const app = Fastify({ logger: false });
+
+  const workTypes = new WorkTypeRepository(db);
+  const people = new PeopleRepository(db);
+  workTypes.seedDefaults(DEFAULT_WORK_TYPES);
+  people.seedIfEmpty(defaultPeople);
+  const orders = new OrderService(db, today);
+  const board = new BoardService(db, orders, new UrgencyRules(DEFAULT_URGENCY_SETTINGS), today);
 
   app.get('/health', async (_req, reply) => {
     try {
@@ -17,10 +43,6 @@ export function buildApp({ db }: AppDeps): FastifyInstance {
     }
   });
 
-  app.get('/', async (_req, reply) => {
-    reply.type('text/html; charset=utf-8');
-    return `<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>ZGE Menedżer</title></head><body><h1>ZGE Menedżer</h1></body></html>`;
-  });
-
+  registerRoutes(app, { orders, board, people, workTypes, today });
   return app;
 }
