@@ -138,3 +138,18 @@ describe('karta zlecenia: termin pomiaru w Kalendarzu Google', () => {
     expect(withMeasurement('completed')).not.toContain('calendar.google.com');
   });
 });
+
+describe('karta zlecenia: zmiana limitu w tym zleceniu', () => {
+  it('offers changing the limit of the active step (e.g. the office announced a longer deadline)', () => {
+    const page = render([step(1, 'done'), step(2, 'active')]);
+    expect(page).toContain('Zmień limit tego kroku');
+    expect(page).toContain('action="/zlecenia/7/kroki/2/limit"');
+    expect(page).toMatch(/name="limitDays"[^>]*value="2"/);
+    expect(page).toContain('Zmień limit: Bartek');
+  });
+
+  it('does not offer it for steps without a limit', () => {
+    const daily = { ...step(1, 'active'), kind: 'daily' as const, limitDays: null };
+    expect(render([daily])).not.toContain('Zmień limit tego kroku');
+  });
+});
