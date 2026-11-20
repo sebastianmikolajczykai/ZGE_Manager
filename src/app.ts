@@ -53,6 +53,7 @@ export function buildApp({
       offersToCall: offers.rows().filter(isRed).length,
       unpaidToRemind: payments.rows().filter(isRed).length,
     }),
+    () => settings.get().confirmActions,
   );
 
   app.get('/health', async (_req, reply) => {

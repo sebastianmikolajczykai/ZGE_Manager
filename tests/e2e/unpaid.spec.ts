@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { clickAndConfirm } from './confirm.js';
 
 test('niezapłacone: po oddaniu klientowi zlecenie przechodzi do zakładki, rozmowa, zapłacone', async ({
   page,
@@ -15,7 +16,7 @@ test('niezapłacone: po oddaniu klientowi zlecenie przechodzi do zakładki, rozm
 
   const card = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   for (let step = 1; step <= 12; step++) {
-    await card.getByRole('button', { name: /^(Zrobione|Zakończone): Łukasz$/ }).click();
+    await clickAndConfirm(page, card.getByRole('button', { name: /^(Zrobione|Zakończone): Łukasz$/ }));
     await expect(card.getByRole('heading', { name: client })).toBeVisible();
   }
   await expect(page.getByRole('row', { name: new RegExp(client) })).toHaveCount(0);
@@ -26,10 +27,10 @@ test('niezapłacone: po oddaniu klientowi zlecenie przechodzi do zakładki, rozm
   await expect(panel.getByText('2900 zł')).toBeVisible();
 
   await panel.getByLabel('Notatka z rozmowy').fill('zapłaci w piątek');
-  await panel.getByRole('button', { name: 'Rozmowa: Marcelina' }).click();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Rozmowa: Marcelina' }));
   await panel.getByText(/^Historia \(\d+\)$/).click();
   await expect(panel.getByText('Marcelina: przypomnienie o zapłacie (zapłaci w piątek)')).toBeVisible();
 
-  await panel.getByRole('button', { name: 'Zapłacone: Bartek' }).click();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zapłacone: Bartek' }));
   await expect(page.getByRole('row', { name: new RegExp(client) })).toHaveCount(0);
 });

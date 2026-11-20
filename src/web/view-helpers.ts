@@ -22,6 +22,7 @@ export function personButtons(
           style="--p:${personColour(p.name)}"
           name="person"
           value="${p.name}"
+          data-label="${label}: ${p.name}"
         >
           ${avatar(p.name)} ${label}: ${p.name}
         </button>`,
