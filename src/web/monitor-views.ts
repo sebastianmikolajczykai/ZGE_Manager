@@ -74,10 +74,17 @@ function tile(r: BoardRow): SafeHtml {
     <div class="st">${r.currentStepName}</div>
     ${progressBar(r.currentStepPosition, r.stepCount)}
     <div class="ft">
-      <span>${r.lastPerson ? html`${avatar(r.lastPerson)} ${r.lastPerson}` : '–'}</span>
+      <span>${who(r)}</span>
       <span><b>${r.daysOnStep}</b> ${dayWord(r.daysOnStep)} na kroku</span>
     </div>
   </article>`;
+}
+
+/** Czyja kolej: osoba bieżącego kroku; gdy nikt nie jest przypisany, kto ostatnio coś zrobił. */
+function who(r: BoardRow): SafeHtml | string {
+  if (r.owner) return html`${avatar(r.owner)} ${r.owner}`;
+  if (r.lastPerson) return html`<small>ostatnio</small> ${avatar(r.lastPerson)} ${r.lastPerson}`;
+  return '–';
 }
 
 function dayWord(n: number): string {
@@ -120,7 +127,7 @@ body { margin:0; font:18px/1.35 "Segoe UI", Inter, system-ui, sans-serif; backgr
 .progress { display:flex; align-items:center; gap:8px; margin-top:4px; } .progress small { color:#9ca3af; font-size:15px; }
 .bar { display:inline-block; flex:1; height:8px; border-radius:4px; background:#374151; overflow:hidden; } .bar span { display:block; height:100%; background:#22c55e; }
 .ft { margin-top:auto; display:flex; justify-content:space-between; align-items:center; font-size:17px; color:#d1d5db; padding-top:8px; }
-.ft b { font-size:30px; color:#fff; }
+.ft b { font-size:30px; color:#fff; } .ft small { color:#9ca3af; font-size:14px; }
 .av { display:inline-grid; place-items:center; width:32px; height:32px; border-radius:50%; background:var(--p); color:#fff; font-size:16px; font-weight:700; vertical-align:middle; }
 .empty { font-size:28px; text-align:center; color:#9ca3af; padding:80px 0; }
 `;

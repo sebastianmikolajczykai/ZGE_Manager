@@ -101,10 +101,10 @@ export function progressBar(position: number, total: number): SafeHtml {
  * zmieniają tylko liczbę w polu (skrypt w layout, po atrybucie data-step), zapis dalej przyciskiem „Zapisz”.
  */
 export function numberStepper(label: string, input: SafeHtml): SafeHtml {
+  // Pole jest pierwsze w kodzie (etykieta <label> wskazuje pierwsze pole w środku); „−” stoi po lewej dzięki CSS (order).
   return html`<span class="stepper"
-    ><button type="button" class="step-btn" data-step="-1" aria-label="Zmniejsz: ${label}">−</button
-    >${input}<button type="button" class="step-btn" data-step="1" aria-label="Zwiększ: ${label}">
-      +
-    </button></span
+    >${input}<button type="button" class="step-btn minus" data-step="-1" aria-label="Zmniejsz: ${label}">
+      −</button
+    ><button type="button" class="step-btn" data-step="1" aria-label="Zwiększ: ${label}">+</button></span
   >`;
 }

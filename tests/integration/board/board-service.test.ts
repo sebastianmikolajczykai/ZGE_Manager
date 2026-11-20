@@ -52,6 +52,14 @@ describe('BoardService: rows for the "Na dziś" board', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('each row knows who the current step belongs to (assigned person or lead person)', () => {
+    const id = orders.create(order('Jan', { leadPerson: 'Anna' }), 'Anna');
+    orders.create(order('Ewa'), 'Anna');
+    expect(board.rows().map((r) => r.owner)).toEqual(['Anna', null]);
+    orders.assignPeople(id, { leadPerson: 'Anna', steps: { 1: 'Piotr' } }, 'Anna');
+    expect(board.rows()[0]?.owner).toBe('Piotr');
+  });
+
   it('shows one row per active order with its current step and details', () => {
     orders.create(order('Jan'), 'Anna');
     const [row] = board.rows();

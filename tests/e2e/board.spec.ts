@@ -15,7 +15,7 @@ test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie,
 
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   await expect(panel.getByRole('heading', { name: client })).toBeVisible();
-  await expect(panel.getByText('Ustalenie terminu pomiaru w terenie')).toBeVisible();
+  await expect(panel.getByText('Ustalenie terminu pomiaru w terenie', { exact: true })).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toBeVisible();
 
   // Historia jest zwinięta; po rozwinięciu przeglądarka pamięta to także po przeładowaniu strony.

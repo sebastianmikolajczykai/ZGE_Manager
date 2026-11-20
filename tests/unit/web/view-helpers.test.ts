@@ -73,9 +73,10 @@ describe('przyciski − / + przy polu liczbowym', () => {
   const input = html`<input type="number" name="redAfterIdleDays" min="1" max="30" value="3" />`;
   const out = numberStepper('Czerwone po', input).value;
 
-  it('puts a minus button before the field and a plus button after it', () => {
-    expect(out.indexOf('−')).toBeLessThan(out.indexOf('name="redAfterIdleDays"'));
-    expect(out.indexOf('name="redAfterIdleDays"')).toBeLessThan(out.lastIndexOf('+'));
+  it('puts the field first, so the surrounding label still names the field (not the minus button)', () => {
+    expect(out.indexOf('name="redAfterIdleDays"')).toBeLessThan(out.indexOf('<button'));
+    expect(out.indexOf('data-step="-1"')).toBeLessThan(out.indexOf('data-step="1"'));
+    expect(out).toContain('class="step-btn minus"');
   });
 
   it('the buttons do not send the form (type="button"), they only change the number', () => {

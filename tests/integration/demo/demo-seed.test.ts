@@ -45,6 +45,12 @@ describe('seedDemo (przykładowe dane do demo)', () => {
     expect(board.every((r) => r.clientName.includes('(przykład)'))).toBe(true);
   });
 
+  it('gives example orders a lead person, so the "Moje" filter shows something for everyone', () => {
+    seedDemo(db, today);
+    const owners = new Set(rows().map((r) => r.owner));
+    expect(owners).toEqual(new Set(['Łukasz', 'Bartek', 'Marcelina']));
+  });
+
   it('adds example offers in every colour, marked as examples', () => {
     seedDemo(db, today);
     const offers = new OfferService(db, () => today, new UrgencyRules(DEFAULT_URGENCY_SETTINGS)).rows();

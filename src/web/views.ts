@@ -99,6 +99,20 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
 export interface BoardOptions {
   counts: NavCounts;
   filter: ColourFilter;
+  /** Filtr „Moje”: tylko zlecenia, w których bieżący krok należy do tej osoby (null = wszyscy). */
+  person?: string | null;
+  /** Osoby do wyboru w filtrze „Moje”. */
+  people?: Person[];
+}
+
+/** Adres Tablicy z zachowaniem filtrów (kolor, osoba) i ewentualnie otwartym zleceniem. */
+function boardUrl(params: { zlecenie?: number; kolor?: ColourFilter; osoba?: string | null }): string {
+  const query = new URLSearchParams();
+  if (params.zlecenie) query.set('zlecenie', String(params.zlecenie));
+  if (params.kolor) query.set('kolor', params.kolor);
+  if (params.osoba) query.set('osoba', params.osoba);
+  const text = query.toString();
+  return text ? `/?${text}` : '/';
 }
 
 const TILE_LABEL: Record<Colour, string> = {
@@ -114,13 +128,11 @@ export function boardPage(
   selectedId: number | null = null,
   options: BoardOptions = { counts: NO_COUNTS, filter: null },
 ): SafeHtml {
-  const shown = options.filter ? rows.filter((r) => r.urgency.colour === options.filter) : rows;
-  const emptyText = options.filter
-    ? 'Brak zleceń w tym kolorze.'
-    : 'Brak aktywnych zleceń. Dodaj pierwsze przyciskiem „+ Dodaj zlecenie”.';
+  const person = options.person ?? null;
+  const { mine, shown } = filterRows(rows, options.filter, person);
   return html` ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <div class="page-head"><h1>Tablica zleceń</h1></div>
-    ${boardTiles(rows, options)}
+    ${boardTiles(mine, options)}
     <div class="split">
       <section class="board" aria-label="Lista zleceń">
         <div class="toolbar">
@@ -131,20 +143,62 @@ export function boardPage(
             aria-label="Szukaj"
             autocomplete="off"
           />
-          ${options.filter ? html`<a class="filter" href="/">Pokaż wszystkie (${rows.length})</a>` : ''}
+          ${personPicker(options.people ?? [], person)}
+          ${
+            options.filter
+              ? html`<a class="filter" href="${boardUrl({ osoba: person })}"
+                  >Pokaż wszystkie (${mine.length})</a
+                >`
+              : ''
+          }
         </div>
-        ${shown.length === 0 ? html`<p class="empty">${emptyText}</p>` : boardTable(shown, selectedId, options.filter)}
+        ${
+          shown.length === 0
+            ? html`<p class="empty">${emptyText(options.filter, person)}</p>`
+            : boardTable(shown, selectedId, options.filter, person)
+        }
         <p class="empty" id="brak-wynikow" hidden>Nic nie pasuje do wyszukiwania.</p>
       </section>
       ${detail ?? html`<section class="detail placeholder" aria-label="Szczegóły zlecenia"><p>Kliknij klienta na liście, żeby zobaczyć etap i co dalej.</p></section>`}
     </div>`;
 }
 
+/** Filtry Tablicy: najpierw osoba („Moje”, liczą się z tego kafelki), potem kolor. */
+function filterRows(rows: BoardRow[], filter: ColourFilter, person: string | null) {
+  const mine = person ? rows.filter((r) => r.owner === person) : rows;
+  const shown = filter ? mine.filter((r) => r.urgency.colour === filter) : mine;
+  return { mine, shown };
+}
+
+/** Napis przy pustej liście: zależy od wybranego filtra (kolor, osoba). */
+function emptyText(filter: ColourFilter, person: string | null): string {
+  if (filter) return 'Brak zleceń w tym kolorze.';
+  if (person) return `${person} nie ma teraz żadnego kroku do zrobienia.`;
+  return 'Brak aktywnych zleceń. Dodaj pierwsze przyciskiem „+ Dodaj zlecenie”.';
+}
+
+/**
+ * Filtr „Moje”: wybór osoby. Program nie ma logowania, więc przeglądarka danego komputera
+ * zapamiętuje wybraną osobę (skrypt w layout) i podpowiada przycisk „Moje”.
+ */
+function personPicker(people: Person[], person: string | null): SafeHtml {
+  if (people.length === 0) return html``;
+  return html`<a class="filter moje" id="moje" href="/" hidden>👤 Moje</a>
+    <select id="osoba" aria-label="Pokaż zlecenia osoby">
+      <option value="">👥 Wszyscy</option>
+      ${people.map(
+        (p) => html`<option value="${p.name}" ${p.name === person ? 'selected' : ''}>👤 ${p.name}</option>`,
+      )}
+    </select>`;
+}
+
 /** Kafelki na górze Tablicy: liczba zleceń w każdym kolorze (klik = filtr) oraz sprawy z innych zakładek. */
 function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
   const colourTile = (c: Colour) => {
     const count = rows.filter((r) => r.urgency.colour === c).length;
-    return html`<a class="tile ${c}${options.filter === c ? ' on' : ''}" href="/?kolor=${c}"
+    return html`<a
+      class="tile ${c}${options.filter === c ? ' on' : ''}"
+      href="${boardUrl({ kolor: c, osoba: options.person ?? null })}"
       ><span class="ti" aria-hidden="true">${STATUS_ICON[c]}</span><b>${count}</b
       ><span>${TILE_LABEL[c]}</span></a
     >`;
@@ -162,8 +216,13 @@ function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
   </div>`;
 }
 
-function boardTable(rows: BoardRow[], selectedId: number | null, filter: ColourFilter): SafeHtml {
-  const link = (id: number) => (filter ? `/?zlecenie=${id}&kolor=${filter}` : `/?zlecenie=${id}`);
+function boardTable(
+  rows: BoardRow[],
+  selectedId: number | null,
+  filter: ColourFilter,
+  person: string | null,
+): SafeHtml {
+  const link = (id: number) => boardUrl({ zlecenie: id, kolor: filter, osoba: person });
   return html`<table data-search-list>
     <thead>
       <tr>
@@ -186,7 +245,10 @@ function boardTable(rows: BoardRow[], selectedId: number | null, filter: ColourF
             <td>${statusChip(r.urgency.colour, COLOUR_LABEL[r.urgency.colour])}</td>
             <td><a href="${link(r.orderId)}">${r.clientName}</a><small>${r.workTypeName}</small></td>
             <td>${r.town}${r.plot ? html`<small>dz. ${r.plot}</small>` : ''}</td>
-            <td class="step-cell">${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}</td>
+            <td class="step-cell">
+              ${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}
+              ${r.owner ? assigneeTag(r.owner) : ''}
+            </td>
             <td class="num">
               <b>${r.daysOnStep}</b
               >${r.urgency.daysOverdue > 0 ? html`<small class="late">${r.urgency.daysOverdue} po terminie</small>` : ''}
@@ -220,6 +282,8 @@ export function orderDetail(
       <dd>${order.town}${order.plot ? html`, dz. ${order.plot}` : ''}</dd>
       <dt>Rodzaj pracy</dt>
       <dd>${workTypeName}</dd>
+      <dt>Prowadzi</dt>
+      <dd>${leadFact(order.leadPerson)}</dd>
       ${
         order.office
           ? html`<dt>Gmina / urząd</dt>
@@ -247,7 +311,8 @@ export function orderDetail(
       }
     </dl>
     <h3>Kroki</h3>
-    ${stepsSection(order, people, urgency)} ${historySection(history)}
+    ${stepsSection(order, people, urgency)} ${order.status === 'active' ? assignForm(order, people) : ''}
+    ${historySection(history)}
   </section>`;
 }
 
@@ -309,7 +374,7 @@ function stepItem(order: Order, step: OrderStep, people: Person[], urgency: Urge
   return html`<li value="${step.position}" class="step ${step.status}">
     ${active ? html`<span class="now-label">CO TERAZ · krok ${step.position} z ${order.steps.length}</span>` : ''}
     <span class="dot" aria-hidden="true">${step.status === 'done' ? '✓' : step.position}</span
-    ><span class="name">${step.name}</span>
+    ><span class="name">${step.name}</span>${step.assignee ? assigneeTag(step.assignee) : ''}
     ${stepMeta(step, active ? urgency : null)}${active ? stepActions(order, step, people) : ''}
   </li>`;
 }
@@ -339,6 +404,54 @@ function stepActions(order: Order, step: OrderStep, people: Person[]): SafeHtml 
     ${step.lastCheckedOn ? html`<small>ostatnio sprawdzone ${formatDate(step.lastCheckedOn)}, ${step.lastCheckedBy}</small>` : ''}
     ${step.limitDays !== null ? limitChangeForm(order.id, step, people) : ''}
   </div>`;
+}
+
+function leadFact(lead: string | null): SafeHtml {
+  return lead ? assigneeTag(lead) : html`<small>nikt (ustaw w „Osoby w zleceniu”)</small>`;
+}
+
+/** Kółko i imię osoby, do której należy zlecenie lub krok. */
+function assigneeTag(name: string): SafeHtml {
+  return html`<span class="assignee">${avatar(name)} ${name}</span>`;
+}
+
+/**
+ * „Osoby w zleceniu”: prowadzący i osoby kroków w jednym formularzu (można zaplanować z góry
+ * i zmieniać w trakcie). Zrobionych kroków nie ma, krok bez osoby należy do prowadzącego.
+ */
+function assignForm(order: Order, people: Person[]): SafeHtml {
+  const open = order.steps.filter((st) => st.status !== 'done');
+  const fields = html`<label class="setting"
+      ><span>Prowadzi zlecenie</span
+      >${personSelect('leadPerson', order.leadPerson, people, '— nikt —', 'Prowadzi zlecenie')}</label
+    >
+    ${open.map(
+      (st) =>
+        html`<label class="setting"
+          ><span>${st.position}. ${st.name}</span
+          >${personSelect(`step_${st.position}`, st.assignee, people, '— prowadzący —', `Osoba do kroku ${st.position}`)}</label
+        >`,
+    )}`;
+  return html`<details class="assign">
+    <summary>👥 Osoby w zleceniu (kto prowadzi, kto robi kroki)</summary>
+    ${personButtons(`/zlecenia/${order.id}/osoby`, 'Zapisz osoby', people, 'secondary', fields)}
+  </details>`;
+}
+
+/** Lista osób do wyboru; osoba usunięta z Ustawień, ale wciąż przypisana, zostaje na liście. */
+function personSelect(
+  name: string,
+  current: string | null,
+  people: Person[],
+  emptyLabel: string,
+  label: string,
+): SafeHtml {
+  const names = people.map((p) => p.name);
+  if (current && !names.includes(current)) names.push(current);
+  return html`<select name="${name}" aria-label="${label}">
+    <option value="">${emptyLabel}</option>
+    ${names.map((n) => html`<option value="${n}" ${n === current ? 'selected' : ''}>${n}</option>`)}
+  </select>`;
 }
 
 /** Zmiana limitu tylko w tym zleceniu, np. gdy urząd zapowiedział dłuższy termin. */
@@ -372,22 +485,20 @@ function undoForm(orderId: number, people: Person[]): SafeHtml {
   </details>`;
 }
 
+/** Jak opisać każde zdarzenie w historii zlecenia (step = nazwa kroku w cudzysłowie lub nic). */
+const HISTORY_TEXT: Record<HistoryEntry['action'], (h: HistoryEntry, step: SafeHtml | string) => SafeHtml> = {
+  created: (h) => html`${h.person}: przyjęcie zlecenia`,
+  step_done: (h, step) => html`${h.person}: zrobione${step}`,
+  checked: (h, step) => html`${h.person}: sprawdzone dziś${step}`,
+  undone: (h, step) => html`${h.person}: cofnięcie${step}`,
+  payment_call: (h) => html`${h.person}: przypomnienie o zapłacie${h.note ? html` (${h.note})` : ''}`,
+  limit_changed: (h) => html`${h.person}: zmiana limitu „${h.stepName}”${h.note ? html` (${h.note})` : ''}`,
+  lead_changed: (h) => html`${h.person}: osoba prowadząca (${h.note})`,
+  step_assigned: (h, step) => html`${h.person}: osoba do kroku${step} (${h.note})`,
+};
+
 export function historyText(h: HistoryEntry): SafeHtml {
-  const step = h.stepName ? html` „${h.stepName}”` : '';
-  switch (h.action) {
-    case 'created':
-      return html`${h.person}: przyjęcie zlecenia`;
-    case 'step_done':
-      return html`${h.person}: zrobione${step}`;
-    case 'checked':
-      return html`${h.person}: sprawdzone dziś${step}`;
-    case 'undone':
-      return html`${h.person}: cofnięcie${step}`;
-    case 'payment_call':
-      return html`${h.person}: przypomnienie o zapłacie${h.note ? html` (${h.note})` : ''}`;
-    case 'limit_changed':
-      return html`${h.person}: zmiana limitu „${h.stepName}”${h.note ? html` (${h.note})` : ''}`;
-  }
+  return HISTORY_TEXT[h.action](h, h.stepName ? html` „${h.stepName}”` : '');
 }
 
 export interface OrderFormValues {
@@ -429,6 +540,18 @@ export function orderForm(
       /></label>
       <label>Notatka <small>(opcjonalnie)</small> <textarea name="note">${v('note')}</textarea></label>
       <label
+        >Prowadzi zlecenie <small>(opcjonalnie; kroki można przypisać później na karcie)</small>
+        <select name="leadPerson">
+          <option value="">— nikt —</option>
+          ${people.map(
+            (p) =>
+              html`<option value="${p.name}" ${v('leadPerson') === p.name ? 'selected' : ''}>
+                ${p.name}
+              </option>`,
+          )}
+        </select></label
+      >
+      <label
         >Kto przyjął
         <select name="person">
           ${people.map((p) => html`<option ${v('person') === p.name ? 'selected' : ''}>${p.name}</option>`)}
@@ -464,6 +587,23 @@ if (search) search.addEventListener('input', function () {
   var none = document.getElementById('brak-wynikow');
   if (none) none.hidden = any || !document.querySelector('[data-search-list]');
 });
+// Filtr „Moje”: bez logowania. Wybrana osoba jest zapamiętana w tej przeglądarce (tylko na tym komputerze).
+var picker = document.getElementById('osoba');
+if (picker) {
+  picker.addEventListener('change', function () {
+    try { if (picker.value) localStorage.setItem('zge:ja', picker.value); } catch (e) {}
+    location.href = picker.value ? '/?osoba=' + encodeURIComponent(picker.value) : '/';
+  });
+  var me = null;
+  try { me = localStorage.getItem('zge:ja'); } catch (e) {}
+  var mine = document.getElementById('moje');
+  var known = me && Array.prototype.some.call(picker.options, function (o) { return o.value === me; });
+  if (mine && known && picker.value !== me) {
+    mine.href = '/?osoba=' + encodeURIComponent(me);
+    mine.textContent = '👤 Moje (' + me + ')';
+    mine.hidden = false;
+  }
+}
 // Przyciski − / + przy polach liczbowych: zmiana o 1 w granicach min–max pola (puste pole: zaczyna od min).
 document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
   b.addEventListener('click', function () {
@@ -589,9 +729,14 @@ details.fold > summary:hover { color:var(--brand); }
 form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
 .setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
 .setting input { grid-column:2; grid-row:1 / span 2; }
+.assignee { display:inline-flex; align-items:center; gap:4px; margin-left:8px; font-size:14px; font-weight:600; color:var(--muted); white-space:nowrap; }
+td .assignee { display:flex; margin:4px 0 0; }
+.assign { margin-top:12px; } .assign > summary { cursor:pointer; font-weight:600; color:var(--brand-dark); }
+.setting select { grid-column:2; grid-row:1 / span 2; font:inherit; padding:6px 8px; border:1px solid #d1d5db; border-radius:10px; width:100%; }
+#osoba { font:inherit; padding:7px 10px; border:1px solid #d1d5db; border-radius:10px; background:#fff; }
 .setting .stepper { grid-column:2; grid-row:1 / span 2; }
 .stepper { display:flex; align-items:stretch; gap:4px; }
-.stepper input { min-width:0; flex:1; }
+.stepper input { min-width:0; flex:1; } .stepper .minus { order:-1; }
 .step-btn { flex:none; width:40px; padding:0; border:1px solid #d1d5db; border-radius:10px; background:#fff; font-size:22px; font-weight:700; line-height:1; color:var(--ink); }
 .step-btn:hover { background:var(--green); border-color:var(--brand); }
 .setting input[type=number] { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; text-align:right; }

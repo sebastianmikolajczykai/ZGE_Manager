@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { BoardService } from '../modules/board/board-service.js';
-import type { OrderService } from '../modules/orders/order-service.js';
+import type { OrderService, PeopleAssignment } from '../modules/orders/order-service.js';
 import type { OrderInput } from '../modules/orders/order-input.js';
 import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
@@ -52,7 +52,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   app.get('/', (req, reply) => {
     const query = req.query as Form;
     const id = Number(query.zlecenie);
-    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null, 200, query.kolor);
+    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null, 200, query);
   });
 
   app.get('/zlecenia/nowe', (req, reply) => {
@@ -104,6 +104,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     s.orders.changeStepLimit(o, p, f.limitDays ?? '', who),
   );
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
+  orderAction('/zlecenia/:id/osoby', (o, _p, who, f) => s.orders.assignPeople(o, toAssignment(f), who));
 
   app.get('/ustawienia', (_req, reply) => renderSettings(reply, s, null));
   app.post('/ustawienia/osoby', (req, reply) => {
@@ -207,9 +208,14 @@ function renderBoard(
   orderId: number | null,
   error: string | null,
   status = 200,
-  colour?: string,
+  query: Form = {},
 ) {
-  const options = { counts: s.pages.counts(), filter: parseColourFilter(colour) };
+  const options = {
+    counts: s.pages.counts(),
+    filter: parseColourFilter(query.kolor),
+    person: optionalField(query, 'osoba'),
+    people: s.people.list(),
+  };
   let detail = null;
   if (orderId !== null) {
     const order = s.orders.get(orderId);
@@ -254,5 +260,16 @@ function toOrderInput(f: Form): OrderInput {
     pricePln: priceField(f),
     note: opt('note'),
     measurementOn: opt('measurementOn'),
+    leadPerson: opt('leadPerson'),
   };
+}
+
+/** Pola „Osoby w zleceniu”: leadPerson oraz step_<numer kroku>. */
+function toAssignment(f: Form): PeopleAssignment {
+  const steps: Record<number, string> = {};
+  for (const [key, value] of Object.entries(f)) {
+    const match = /^step_(\d+)$/.exec(key);
+    if (match) steps[Number(match[1])] = value;
+  }
+  return { leadPerson: f.leadPerson ?? '', steps };
 }
