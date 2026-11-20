@@ -45,3 +45,22 @@ test('formularz pokazuje czytelny błąd przy złym telefonie', async ({ page })
   await expect(page.getByRole('alert')).toContainText('Nieprawidłowy numer telefonu');
   await expect(page.getByLabel('Klient')).toHaveValue('Ktoś');
 });
+
+test('wyszukiwarka na Tablicy pokazuje tylko pasujące zlecenia', async ({ page }) => {
+  const stamp = Date.now();
+  for (const name of [`Szukany ${stamp}`, `Inny ${stamp}`]) {
+    await page.goto('/zlecenia/nowe');
+    await page.getByLabel('Klient').fill(name);
+    await page.getByLabel('Telefon').fill('600 100 200');
+    await page.getByLabel('Miejscowość').fill('Przykładowo');
+    await page.getByLabel('Data pomiaru').fill('2030-01-15');
+    await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+  }
+  await page.goto('/');
+  await page.getByRole('searchbox', { name: 'Szukaj' }).fill(`szukany ${stamp}`);
+  await expect(page.getByRole('row', { name: new RegExp(`Szukany ${stamp}`) })).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(`Inny ${stamp}`) })).toBeHidden();
+
+  await page.getByRole('searchbox', { name: 'Szukaj' }).fill('nie ma takiego klienta xyz');
+  await expect(page.getByText('Nic nie pasuje do wyszukiwania.')).toBeVisible();
+});

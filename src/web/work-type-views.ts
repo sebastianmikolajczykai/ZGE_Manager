@@ -17,7 +17,7 @@ const ACTION_LABEL: Record<WorkTypeAction, string> = {
 
 /** Sekcja na ekranie Ustawień: lista rodzajów prac i historia ich zmian. */
 export function workTypesSection(workTypes: WorkType[], history: WorkTypeHistoryEntry[]): SafeHtml {
-  return html`<h3>Rodzaje prac</h3>
+  return html`<h3 id="rodzaje-prac">Rodzaje prac</h3>
     <p><small>Kroki, ich kolejność i limity. Zmiany dotyczą tylko nowych zleceń.</small></p>
     <ul class="work-types">
       ${workTypes.map(

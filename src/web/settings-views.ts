@@ -39,8 +39,12 @@ export function settingsFormValues(settings: AppSettings): Record<string, string
 export function settingsPage(people: Person[], view: SettingsView, error: string | null): SafeHtml {
   return html`<section class="form-page">
     <h2>Ustawienia</h2>
+    <nav class="settings-nav" aria-label="Sekcje ustawień">
+      <a href="#kolory">🎨 Kolory i przypomnienia</a><a href="#rodzaje-prac">🧭 Rodzaje prac</a
+      ><a href="#dni-wolne">🏖 Dni wolne</a><a href="#osoby">👥 Osoby</a>
+    </nav>
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
-    <h3>Kolory i przypomnienia</h3>
+    <h3 id="kolory">Kolory i przypomnienia</h3>
     <p><small>Liczymy tylko dni robocze (pn–pt) bez świąt. Zmiany działają od razu.</small></p>
     ${personButtons('/ustawienia/progi', 'Zapisz', people, 'primary', settingFields(view.values))}
     <details class="undo">
@@ -50,7 +54,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     </details>
     ${fold('settings-history', `Historia zmian ustawień (${view.history.length})`, historyList(view.history))}
     ${workTypesSection(view.workTypes, view.workTypeHistory)} ${daysOffSection(view.daysOff, people)}
-    <h3>Osoby (przyciski „kto zrobił”)</h3>
+    <h3 id="osoby">Osoby (przyciski „kto zrobił”)</h3>
     <ul class="people-list">
       ${people.map(
         (p) =>
@@ -76,7 +80,7 @@ function daysOffSection(daysOff: DaysOff[], people: Person[]): SafeHtml {
     ><label class="setting"
       ><span>Powód</span><small>opcjonalnie, np. urlop</small><input name="note" class="text"
     /></label>`;
-  return html`<h3>Dni wolne firmy</h3>
+  return html`<h3 id="dni-wolne">Dni wolne firmy</h3>
     <p><small>Urlop, długi weekend: te dni nie liczą się do limitów, tak jak święta.</small></p>
     ${
       daysOff.length === 0

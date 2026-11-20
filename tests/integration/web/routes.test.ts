@@ -51,6 +51,18 @@ describe('web routes', () => {
     expect(res.body).toContain('Anna');
   });
 
+  it('?kolor=red shows only orders after the deadline; an unknown colour shows everything', async () => {
+    await createOrder({ clientName: 'Stary Klient' });
+    today = '2026-12-10';
+    await createOrder({ clientName: 'Nowy Klient', measurementOn: '2026-12-30' });
+    const red = (await app.inject({ method: 'GET', url: '/?kolor=red' })).body;
+    expect(red).toContain('Stary Klient');
+    expect(red).not.toContain('Nowy Klient');
+    const all = (await app.inject({ method: 'GET', url: '/?kolor=fioletowy' })).body;
+    expect(all).toContain('Stary Klient');
+    expect(all).toContain('Nowy Klient');
+  });
+
   it('creating an order redirects to the board with the order open', async () => {
     const res = await createOrder();
     expect(res.statusCode).toBe(303);

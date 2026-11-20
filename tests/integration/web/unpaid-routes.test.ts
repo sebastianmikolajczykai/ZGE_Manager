@@ -80,6 +80,17 @@ describe('Niezapłacone screens', () => {
     expect(page.body).toContain('zadzwoń i przypomnij o zapłacie');
   });
 
+  it('shows the total still to be paid and a red badge in the menu when someone should be reminded', async () => {
+    await handOver();
+    await handOver();
+    today = '2026-12-10';
+    const page = (await get('/niezaplacone')).body;
+    expect(page).toMatch(/Razem do zapłaty[\s\S]*?6000 zł/);
+    expect(page).toMatch(/Do przypomnienia dziś[\s\S]*?<b[^>]*>2</);
+    const menu = page.slice(page.indexOf('<aside'), page.indexOf('</aside>'));
+    expect(menu).toMatch(/href="\/niezaplacone"[\s\S]*?class="badge"[^>]*>2</);
+  });
+
   it('a reminder call is kept in the order history with its note', async () => {
     const id = await handOver();
     const res = await post(`/niezaplacone/${id}/rozmowa`, { person: 'Piotr', note: 'zapłaci w piątek' });
