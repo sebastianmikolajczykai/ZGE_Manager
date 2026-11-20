@@ -329,7 +329,7 @@ form.people { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; }
 button { font:inherit; border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
 a.button { display:inline-block; text-decoration:none; font-weight:600; border-radius:6px; padding:8px 12px; }
 button.primary, a.button.primary { background:var(--brand); color:#fff; } button.secondary, a.button.secondary { background:#e3f3e6; color:#14610a; }
-button.danger { background:var(--red); color:var(--red-ink); } button.small, a.button.small { padding:4px 10px; font-size:15px; }
+button.danger { background:var(--red); color:var(--red-ink); } button.small, a.button.small { padding:4px 10px; font-size:15px; } a.button.small { white-space:nowrap; margin-top:4px; }
 button.big { font-size:20px; padding:12px 20px; }
 /* Zwijane sekcje: klikalna strzałka (obraca się po rozwinięciu). */
 details.fold { margin:10px 0; } details.fold > summary { cursor:pointer; list-style:none; font-weight:700; padding:6px 0; user-select:none; }
