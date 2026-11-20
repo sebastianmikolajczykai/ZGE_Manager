@@ -5,22 +5,29 @@ import type { OrderInput } from '../modules/orders/order-input.js';
 import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
-import type { SafeHtml } from './html.js';
-import { boardPage, layout, orderDetail, orderForm, settingsPage, type OrderFormValues } from './views.js';
+import type { OfferService } from '../modules/offers/offer-service.js';
+import { boardPage, orderDetail, orderForm, settingsPage, type OrderFormValues } from './views.js';
+import { registerOfferRoutes } from './offer-routes.js';
+import {
+  HTTP_BAD_REQUEST,
+  HTTP_FORBIDDEN,
+  HTTP_NOT_FOUND,
+  HTTP_SEE_OTHER,
+  message,
+  optionalField,
+  priceField,
+  sendPage,
+  type Form,
+} from './http.js';
 
 export interface WebServices {
   orders: OrderService;
   board: BoardService;
   people: PeopleRepository;
   workTypes: WorkTypeRepository;
+  offers: OfferService;
   today: () => LocalDate;
 }
-
-type Form = Record<string, string>;
-const HTTP_SEE_OTHER = 303;
-const HTTP_BAD_REQUEST = 400;
-const HTTP_FORBIDDEN = 403;
-const HTTP_NOT_FOUND = 404;
 
 /** Ekrany aplikacji: tablica z kartą zlecenia, formularz nowego zlecenia, ustawienia. */
 export function registerRoutes(app: FastifyInstance, s: WebServices): void {
@@ -34,14 +41,23 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null);
   });
 
-  app.get('/zlecenia/nowe', (_req, reply) =>
-    sendPage(reply, 'Nowe zlecenie', orderForm(s.workTypes.findAll(), s.people.list(), {}, null)),
-  );
+  app.get('/zlecenia/nowe', (req, reply) => {
+    const offerId = Number((req.query as Form).oferta);
+    const offer = Number.isInteger(offerId) && offerId > 0 ? s.offers.get(offerId) : null;
+    return sendPage(
+      reply,
+      'Nowe zlecenie',
+      orderForm(s.workTypes.findAll(), s.people.list(), offer ? valuesFromOffer(offer) : {}, null),
+    );
+  });
 
   app.post('/zlecenia', (req, reply) => {
     const form = req.body as Form;
     try {
+      const offerId = optionalField(form, 'offerId');
+      if (offerId !== null) s.offers.requireOpen(Number(offerId)); // przed zapisem: nie twórz zlecenia z zamkniętej oferty
       const id = s.orders.create(toOrderInput(form), form.person ?? '');
+      if (offerId !== null) s.offers.markAccepted(Number(offerId), form.person ?? '', id);
       return reply.redirect(`/?zlecenie=${id}`, HTTP_SEE_OTHER);
     } catch (err) {
       return sendPage(
@@ -81,6 +97,23 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     s.people.remove(Number((req.params as Form).id));
     return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
   });
+
+  registerOfferRoutes(app, s);
+}
+
+/** Formularz zlecenia wypełniony danymi z przyjętej oferty. */
+function valuesFromOffer(o: NonNullable<ReturnType<OfferService['get']>>): OrderFormValues {
+  const values: OrderFormValues = {
+    offerId: String(o.id),
+    clientName: o.clientName,
+    phone: o.phone,
+    workTypeId: String(o.workTypeId),
+  };
+  if (o.town) values.town = o.town;
+  if (o.plot) values.plot = o.plot;
+  if (o.pricePln !== null) values.pricePln = String(o.pricePln).replace('.', ',');
+  if (o.note) values.note = o.note;
+  return values;
 }
 
 function renderBoard(
@@ -108,10 +141,6 @@ function renderBoard(
   return sendPage(reply, 'ZGE Menedżer', boardPage(s.board.rows(), detail, error, orderId), status);
 }
 
-function sendPage(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
-  return reply.code(status).type('text/html; charset=utf-8').send(layout(title, body));
-}
-
 /** Ochrona przed formularzem wysłanym z obcej strony (CSRF): POST tylko z tej samej aplikacji. */
 async function rejectForeignOrigin(req: FastifyRequest, reply: FastifyReply) {
   if (req.method !== 'POST') return;
@@ -122,8 +151,7 @@ async function rejectForeignOrigin(req: FastifyRequest, reply: FastifyReply) {
 }
 
 function toOrderInput(f: Form): OrderInput {
-  const opt = (k: string) => (f[k]?.trim() ? (f[k] as string) : null);
-  const price = opt('pricePln');
+  const opt = (k: string) => optionalField(f, k);
   return {
     clientName: f.clientName ?? '',
     phone: f.phone ?? '',
@@ -131,12 +159,8 @@ function toOrderInput(f: Form): OrderInput {
     workTypeId: Number(f.workTypeId),
     plot: opt('plot'),
     office: opt('office'),
-    pricePln: price === null ? null : Number(price.replace(',', '.').replace(/\s/g, '')),
+    pricePln: priceField(f),
     note: opt('note'),
     measurementOn: opt('measurementOn'),
   };
-}
-
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : 'Nieznany błąd';
 }

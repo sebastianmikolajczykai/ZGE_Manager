@@ -1,4 +1,5 @@
 import { html, SafeHtml } from './html.js';
+import { formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
 import type { BoardRow } from '../modules/board/board-service.js';
 import type { HistoryEntry, Order, OrderStep } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
@@ -27,8 +28,8 @@ export function layout(title: string, body: SafeHtml): string {
             ><span class="app">ZGE Menedżer</span>
           </div>
           <nav>
-            <a href="/">Tablica</a><a class="primary" href="/zlecenia/nowe">+ Dodaj zlecenie</a
-            ><a href="/ustawienia">Ustawienia</a>
+            <a href="/">Tablica</a><a href="/oferty">Oferty</a
+            ><a class="primary" href="/zlecenia/nowe">+ Dodaj zlecenie</a><a href="/ustawienia">Ustawienia</a>
           </nav>
         </header>
         <main>${body}</main>
@@ -170,15 +171,6 @@ function undoForm(orderId: number, people: Person[]): SafeHtml {
   </details>`;
 }
 
-function personButtons(action: string, label: string, people: Person[], style: string): SafeHtml {
-  if (people.length === 0) return html`<p class="error">Dodaj osoby w Ustawieniach.</p>`;
-  return html`<form method="post" action="${action}" class="people">
-    ${people.map(
-      (p) => html`<button class="${style}" name="person" value="${p.name}">${label}: ${p.name}</button>`,
-    )}
-  </form>`;
-}
-
 function historyText(h: HistoryEntry): SafeHtml {
   const step = h.stepName ? html` „${h.stepName}”` : '';
   switch (h.action) {
@@ -208,6 +200,7 @@ export function orderForm(
     <h2>Nowe zlecenie</h2>
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <form method="post" action="/zlecenia" class="order-form">
+      ${v('offerId') ? html`<input type="hidden" name="offerId" value="${v('offerId')}" />` : ''}
       <label>Klient <input name="clientName" required value="${v('clientName')}" /></label>
       <label>Telefon <input name="phone" required inputmode="tel" value="${v('phone')}" /></label>
       <label>Miejscowość <input name="town" required value="${v('town')}" /></label>
@@ -269,26 +262,11 @@ export function settingsPage(people: Person[], error: string | null): SafeHtml {
   </section>`;
 }
 
-function rowClass(u: Urgency): string {
-  return `c-${u.colour}${u.blink ? ' blink' : ''}`;
-}
-
-function formatPrice(pln: number | null): string {
-  if (pln === null) return '–';
-  const decimals = Number.isInteger(pln) ? 0 : 2;
-  return `${pln.toLocaleString('pl-PL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} zł`;
-}
-
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-');
-  return y && m && d ? `${d}.${m}.${y}` : iso;
-}
-
 const REFRESH_SCRIPT = `
 setInterval(function () {
   var busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   var openUndo = document.querySelector('details[open]');
-  if (!busy && !openUndo && location.pathname === '/') location.reload();
+  if (!busy && !openUndo && (location.pathname === '/' || location.pathname === '/oferty')) location.reload();
 }, ${REFRESH_SECONDS * 1000});`;
 
 const STYLES = `
@@ -323,7 +301,8 @@ dl { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; } dt { color:va
 .actions { margin:6px 0 10px; }
 form.people { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; }
 button { font:inherit; border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
-button.primary { background:var(--brand); color:#fff; } button.secondary { background:#e3f3e6; color:#14610a; }
+a.button { display:inline-block; text-decoration:none; font-weight:600; border-radius:6px; padding:8px 12px; }
+button.primary, a.button.primary { background:var(--brand); color:#fff; } button.secondary, a.button.secondary { background:#e3f3e6; color:#14610a; }
 button.danger { background:var(--red); color:var(--red-ink); } button.small { padding:4px 8px; font-size:14px; }
 button.big { font-size:20px; padding:12px 20px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
@@ -332,6 +311,8 @@ button.big { font-size:20px; padding:12px 20px; }
 .form-page { max-width:720px; background:#fff; padding:20px; border-radius:8px; }
 .order-form label, form.inline label { display:block; margin:10px 0; font-weight:600; }
 .order-form input, .order-form select, .order-form textarea, form.inline input { display:block; width:100%; font:inherit; padding:8px; margin-top:4px; border:1px solid var(--line); border-radius:6px; }
+.offer-call textarea { display:block; width:100%; font:inherit; padding:6px; margin:4px 0; border:1px solid var(--line); border-radius:6px; }
+.offer-call .choice { display:block; margin:4px 0; font-weight:600; } .page-actions { margin:0 0 12px; }
 .people-list li { display:flex; gap:12px; align-items:center; margin:6px 0; } .people-list form { margin:0; }
 `;
 
