@@ -57,7 +57,41 @@ describe('validateWorkType', () => {
   });
 });
 
+describe('payment step (Niezapłacone)', () => {
+  const pay = (change: Partial<StepTemplate> = {}): StepTemplate => ({
+    name: 'Zapłata',
+    kind: 'waiting',
+    limitDays: 14,
+    provisional: true,
+    payment: true,
+    ...change,
+  });
+
+  it('accepts one waiting step with a limit marked as payment', () => {
+    expect(() => validateWorkType({ name: 'P', steps: [stepA, pay()] })).not.toThrow();
+  });
+
+  it('rejects a payment step that is not a waiting step', () => {
+    expect(() => validateWorkType({ name: 'P', steps: [pay({ kind: 'own' })] })).toThrow(/zapłat/i);
+  });
+
+  it('rejects a payment step without a limit', () => {
+    expect(() => validateWorkType({ name: 'P', steps: [pay({ limitDays: null })] })).toThrow(/limit/i);
+  });
+
+  it('rejects two payment steps', () => {
+    expect(() => validateWorkType({ name: 'P', steps: [pay(), pay({ name: 'Dopłata' })] })).toThrow(
+      /jeden krok zapłaty/,
+    );
+  });
+});
+
 describe('default "Podział nieruchomości" template', () => {
+  it('marks "Zapłata" (and only it) as the payment step', () => {
+    const steps = DEFAULT_WORK_TYPES[0]?.steps ?? [];
+    expect(steps.filter((s) => s.payment).map((s) => s.name)).toEqual(['Zapłata']);
+  });
+
   const found = DEFAULT_WORK_TYPES.find((w) => w.name === 'Podział nieruchomości');
   if (!found) throw new Error('Brak szablonu podziału');
   const podzial = found;

@@ -8,6 +8,8 @@ import type { LocalDate } from '../modules/urgency/day-counter.js';
 import type { OfferService } from '../modules/offers/offer-service.js';
 import { boardPage, orderDetail, orderForm, settingsPage, type OrderFormValues } from './views.js';
 import { registerOfferRoutes } from './offer-routes.js';
+import { registerUnpaidRoutes } from './unpaid-routes.js';
+import type { PaymentService } from '../modules/payments/payment-service.js';
 import {
   HTTP_BAD_REQUEST,
   HTTP_FORBIDDEN,
@@ -26,6 +28,7 @@ export interface WebServices {
   people: PeopleRepository;
   workTypes: WorkTypeRepository;
   offers: OfferService;
+  payments: PaymentService;
   today: () => LocalDate;
 }
 
@@ -99,6 +102,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   });
 
   registerOfferRoutes(app, s);
+  registerUnpaidRoutes(app, s);
 }
 
 /** Formularz zlecenia wypełniony danymi z przyjętej oferty. */

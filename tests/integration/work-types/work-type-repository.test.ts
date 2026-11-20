@@ -35,10 +35,21 @@ describe('WorkTypeRepository', () => {
       id,
       name: 'Mapa',
       steps: [
-        { position: 1, name: 'Pierwszy', kind: 'own', limitDays: 2, provisional: false },
-        { position: 2, name: 'Drugi', kind: 'waiting', limitDays: null, provisional: true },
+        { position: 1, name: 'Pierwszy', kind: 'own', limitDays: 2, provisional: false, payment: false },
+        { position: 2, name: 'Drugi', kind: 'waiting', limitDays: null, provisional: true, payment: false },
       ],
     });
+  });
+
+  it('stores and reads back the payment flag', () => {
+    const id = repo.create({
+      name: 'Z zapłatą',
+      steps: [
+        { name: 'Robota', kind: 'own', limitDays: 2, provisional: false },
+        { name: 'Zapłata', kind: 'waiting', limitDays: 14, provisional: true, payment: true },
+      ],
+    });
+    expect(repo.findById(id)?.steps.map((st) => st.payment)).toEqual([false, true]);
   });
 
   it('returns null for an unknown id', () => {

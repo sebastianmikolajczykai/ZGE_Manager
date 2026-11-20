@@ -17,6 +17,8 @@ export interface StepTemplate {
   limitDays: number | null;
   /** true = limit to założenie, do potwierdzenia przez klienta. */
   provisional: boolean;
+  /** true = krok „Zapłata”: zlecenie przechodzi wtedy z tablicy do zakładki Niezapłacone. */
+  payment?: boolean;
 }
 
 export interface WorkTypeDefinition {
@@ -35,11 +37,17 @@ export function validateWorkType(def: WorkTypeDefinition): void {
     if (seen.has(key)) throw new Error(`Krok „${step.name}” powtarza się w „${def.name}”`);
     seen.add(key);
   });
+  if (def.steps.filter((s) => s.payment).length > 1) {
+    throw new Error(`Rodzaj pracy „${def.name}” może mieć tylko jeden krok zapłaty`);
+  }
 }
 
 function validateStep(step: StepTemplate, position: number): void {
   if (!step.name.trim()) throw new Error(`Krok ${position} musi mieć nazwę`);
   if (!STEP_KINDS.includes(step.kind)) throw new Error(`Krok ${position}: nieznany rodzaj „${step.kind}”`);
+  if (step.payment && (step.kind !== 'waiting' || step.limitDays === null)) {
+    throw new Error(`Krok zapłaty „${step.name}” musi być typu waiting i mieć limit dni`);
+  }
   if (step.limitDays === null) return;
   if (KINDS_WITHOUT_LIMIT.includes(step.kind)) {
     throw new Error(`Krok ${position} („${step.name}”) nie ma limitu dni, bo jest typu ${step.kind}`);

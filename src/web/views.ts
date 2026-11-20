@@ -28,7 +28,7 @@ export function layout(title: string, body: SafeHtml): string {
             ><span class="app">ZGE Menedżer</span>
           </div>
           <nav>
-            <a href="/">Tablica</a><a href="/oferty">Oferty</a
+            <a href="/">Tablica</a><a href="/oferty">Oferty</a><a href="/niezaplacone">Niezapłacone</a
             ><a class="primary" href="/zlecenia/nowe">+ Dodaj zlecenie</a><a href="/ustawienia">Ustawienia</a>
           </nav>
         </header>
@@ -171,7 +171,7 @@ function undoForm(orderId: number, people: Person[]): SafeHtml {
   </details>`;
 }
 
-function historyText(h: HistoryEntry): SafeHtml {
+export function historyText(h: HistoryEntry): SafeHtml {
   const step = h.stepName ? html` „${h.stepName}”` : '';
   switch (h.action) {
     case 'created':
@@ -182,6 +182,8 @@ function historyText(h: HistoryEntry): SafeHtml {
       return html`${h.person}: sprawdzone dziś${step}`;
     case 'undone':
       return html`${h.person}: cofnięcie${step}`;
+    case 'payment_call':
+      return html`${h.person}: przypomnienie o zapłacie${h.note ? html` (${h.note})` : ''}`;
   }
 }
 
@@ -266,7 +268,7 @@ const REFRESH_SCRIPT = `
 setInterval(function () {
   var busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   var openUndo = document.querySelector('details[open]');
-  if (!busy && !openUndo && (location.pathname === '/' || location.pathname === '/oferty')) location.reload();
+  if (!busy && !openUndo && ['/', '/oferty', '/niezaplacone'].indexOf(location.pathname) >= 0) location.reload();
 }, ${REFRESH_SECONDS * 1000});`;
 
 const STYLES = `
@@ -311,6 +313,7 @@ button.big { font-size:20px; padding:12px 20px; }
 .form-page { max-width:720px; background:#fff; padding:20px; border-radius:8px; }
 .order-form label, form.inline label { display:block; margin:10px 0; font-weight:600; }
 .order-form input, .order-form select, .order-form textarea, form.inline input { display:block; width:100%; font:inherit; padding:8px; margin-top:4px; border:1px solid var(--line); border-radius:6px; }
+.offer-call label, form.people > label { flex-basis:100%; }
 .offer-call textarea { display:block; width:100%; font:inherit; padding:6px; margin:4px 0; border:1px solid var(--line); border-radius:6px; }
 .offer-call .choice { display:block; margin:4px 0; font-weight:600; } .page-actions { margin:0 0 12px; }
 .people-list li { display:flex; gap:12px; align-items:center; margin:6px 0; } .people-list form { margin:0; }
