@@ -27,6 +27,7 @@ test('niezapłacone: po oddaniu klientowi zlecenie przechodzi do zakładki, rozm
 
   await panel.getByLabel('Notatka z rozmowy').fill('zapłaci w piątek');
   await panel.getByRole('button', { name: 'Rozmowa: Marcelina' }).click();
+  await panel.getByText(/^Historia \(\d+\)$/).click();
   await expect(panel.getByText('Marcelina: przypomnienie o zapłacie (zapłaci w piątek)')).toBeVisible();
 
   await panel.getByRole('button', { name: 'Zapłacone: Bartek' }).click();

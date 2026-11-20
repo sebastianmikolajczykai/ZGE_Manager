@@ -35,3 +35,14 @@ export function formatDate(iso: string): string {
   const [y, m, d] = iso.split('-');
   return y && m && d ? `${d}.${m}.${y}` : iso;
 }
+
+/**
+ * Sekcja zwijana strzałką (np. zrobione kroki, historia). Domyślnie zwinięta;
+ * przeglądarka pamięta, czy była rozwinięta (skrypt w layout, po atrybucie data-fold).
+ */
+export function fold(name: string, title: string, content: SafeHtml): SafeHtml {
+  return html`<details class="fold" data-fold="${name}">
+    <summary>${title}</summary>
+    ${content}
+  </details>`;
+}

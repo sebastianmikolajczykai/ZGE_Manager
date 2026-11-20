@@ -1,5 +1,5 @@
 import { html, SafeHtml } from './html.js';
-import { formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
+import { fold, formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
 import type { BoardRow } from '../modules/board/board-service.js';
 import type { HistoryEntry, Order, OrderStep } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
@@ -133,15 +133,31 @@ export function orderDetail(
       }
     </dl>
     <h3>Kroki</h3>
-    <ol class="steps">
-      ${order.steps.map((s) => stepItem(order, s, people))}
-    </ol>
-    ${order.steps.some((s) => s.status === 'done') ? undoForm(order.id, people) : ''}
-    <h3>Historia</h3>
-    <ul class="history">
-      ${[...history].reverse().map((h) => html`<li><time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`)}
-    </ul>
+    ${stepsSection(order, people)} ${historySection(history)}
   </section>`;
+}
+
+/** Zrobione kroki zwinięte pod strzałką, aktywny i kolejne widoczne (z oryginalnymi numerami). */
+function stepsSection(order: Order, people: Person[]): SafeHtml {
+  const done = order.steps.filter((s) => s.status === 'done');
+  const open = order.steps.filter((s) => s.status !== 'done');
+  const list = (steps: OrderStep[]) =>
+    html`<ol class="steps">
+      ${steps.map((s) => stepItem(order, s, people))}
+    </ol>`;
+  return html`${done.length > 0 ? fold('steps-done', `Zrobione kroki (${done.length})`, list(done)) : ''}
+  ${open.length > 0 ? list(open) : ''} ${done.length > 0 ? undoForm(order.id, people) : ''}`;
+}
+
+/** Historia zlecenia (najnowsze na górze), zwijana. Używana też w zakładce Niezapłacone. */
+export function historySection(history: HistoryEntry[]): SafeHtml {
+  return fold(
+    'history',
+    `Historia (${history.length})`,
+    html`<ul class="history">
+      ${[...history].reverse().map((h) => html`<li><time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`)}
+    </ul>`,
+  );
 }
 
 function stepItem(order: Order, step: OrderStep, people: Person[]): SafeHtml {
@@ -161,12 +177,16 @@ function stepItem(order: Order, step: OrderStep, people: Person[]): SafeHtml {
           ${step.lastCheckedOn ? html`<small>ostatnio sprawdzone ${formatDate(step.lastCheckedOn)}, ${step.lastCheckedBy}</small>` : ''}
         </div>`
       : '';
-  return html`<li class="step ${step.status}"><span class="name">${step.name}</span> ${meta}${actions}</li>`;
+  return html`<li value="${step.position}" class="step ${step.status}">
+    <span class="name">${step.name}</span> ${meta}${actions}
+  </li>`;
 }
 
 function undoForm(orderId: number, people: Person[]): SafeHtml {
   return html`<details class="undo">
-    <summary>Cofnij ostatnie odhaczenie (pomyłka)</summary>
+    <summary class="button undo-toggle">
+      <span aria-hidden="true">↶</span> Cofnij ostatnie odhaczenie (pomyłka)
+    </summary>
     ${personButtons(`/zlecenia/${orderId}/cofnij`, 'Cofnij', people, 'danger')}
   </details>`;
 }
@@ -265,10 +285,18 @@ export function settingsPage(people: Person[], error: string | null): SafeHtml {
 }
 
 const REFRESH_SCRIPT = `
+// Zwijane sekcje (data-fold) pamiętają w przeglądarce, czy są rozwinięte, także po odświeżeniu.
+document.querySelectorAll('details[data-fold]').forEach(function (d) {
+  var key = 'fold:' + d.getAttribute('data-fold');
+  try { if (localStorage.getItem(key) === 'open') d.open = true; } catch (e) {}
+  d.addEventListener('toggle', function () {
+    try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch (e) {}
+  });
+});
 setInterval(function () {
   var busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-  var openUndo = document.querySelector('details[open]');
-  if (!busy && !openUndo && ['/', '/oferty', '/niezaplacone'].indexOf(location.pathname) >= 0) location.reload();
+  var openForm = document.querySelector('details[open]:not(.fold)');
+  if (!busy && !openForm && ['/', '/oferty', '/niezaplacone'].indexOf(location.pathname) >= 0) location.reload();
 }, ${REFRESH_SECONDS * 1000});`;
 
 const STYLES = `
@@ -307,6 +335,15 @@ a.button { display:inline-block; text-decoration:none; font-weight:600; border-r
 button.primary, a.button.primary { background:var(--brand); color:#fff; } button.secondary, a.button.secondary { background:#e3f3e6; color:#14610a; }
 button.danger { background:var(--red); color:var(--red-ink); } button.small { padding:4px 8px; font-size:14px; }
 button.big { font-size:20px; padding:12px 20px; }
+/* Zwijane sekcje: klikalna strzałka (obraca się po rozwinięciu). */
+details.fold { margin:10px 0; } details.fold > summary { cursor:pointer; list-style:none; font-weight:700; padding:6px 0; user-select:none; }
+details.fold > summary::-webkit-details-marker, .undo-toggle::-webkit-details-marker { display:none; }
+details.fold > summary::before { content:''; display:inline-block; width:8px; height:8px; margin:0 10px 2px 4px; border:solid var(--brand); border-width:0 3px 3px 0; transform:rotate(-45deg); transition:transform .15s; }
+details.fold[open] > summary::before { transform:rotate(45deg); }
+details.fold > summary:hover { color:var(--brand); }
+/* Przycisk „Cofnij ostatnie odhaczenie”: wyraźny, ale spokojny (czerwony obrys). */
+.undo { margin:12px 0; } .undo-toggle { display:inline-block; border-radius:6px; font-weight:600; list-style:none; cursor:pointer; background:#fff; color:var(--red-ink); border:2px solid var(--red-ink); font-size:17px; padding:10px 16px; user-select:none; }
+.undo-toggle:hover, .undo[open] > .undo-toggle { background:var(--red); } .undo[open] > form { margin-top:8px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
 .error { background:var(--red); color:var(--red-ink); padding:10px 14px; border-radius:6px; }
 .empty { background:#fff; padding:20px; }

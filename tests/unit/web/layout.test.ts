@@ -24,4 +24,15 @@ describe('layout (wygląd w stylu ZGE)', () => {
     expect(script).toContain('&&');
     expect(script).not.toMatch(/&amp;|&#39;|&quot;/);
   });
+
+  it('an expanded fold (steps, history) does not stop the auto-refresh, only open undo/reject forms do', () => {
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    expect(script).toContain('details[open]:not(.fold)');
+  });
+
+  it('remembers which folds were open, so the 60-second refresh does not close them', () => {
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    expect(script).toContain('localStorage');
+    expect(script).toContain('data-fold');
+  });
 });
