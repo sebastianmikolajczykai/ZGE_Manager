@@ -37,7 +37,7 @@ export function registerOfferRoutes(app: FastifyInstance, s: OfferWebServices): 
     s.pages.send(
       reply,
       'Nowa oferta',
-      offerForm(s.workTypes.findAll(), s.people.list(), { sentOn: s.today() }, null),
+      offerForm(s.workTypes.findActive(), s.people.list(), { sentOn: s.today() }, null),
     ),
   );
 
@@ -50,7 +50,7 @@ export function registerOfferRoutes(app: FastifyInstance, s: OfferWebServices): 
       return s.pages.send(
         reply,
         'Nowa oferta',
-        offerForm(s.workTypes.findAll(), s.people.list(), form, message(err)),
+        offerForm(s.workTypes.findActive(), s.people.list(), form, message(err)),
         HTTP_BAD_REQUEST,
       );
     }

@@ -347,6 +347,19 @@ form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 
 .setting input[type=number] { font:inherit; padding:6px 8px; width:100%; border:1px solid var(--line); border-radius:6px; text-align:right; }
 .setting input[type=date], .setting input.text { font:inherit; padding:6px 8px; width:100%; border:1px solid var(--line); border-radius:6px; }
 .setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
+/* Edytor rodzaju pracy. */
+.form-page.wide { max-width:1100px; }
+.default-submit { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
+.wt-name { display:block; font-weight:600; margin:10px 0; } .wt-name input { display:block; width:100%; font:inherit; padding:8px; margin-top:4px; border:1px solid var(--line); border-radius:6px; }
+.steps-editor input, .steps-editor select { font:inherit; padding:6px; border:1px solid var(--line); border-radius:6px; width:100%; }
+.steps-editor input.limit { width:80px; text-align:right; } .steps-editor select { width:auto; } .steps-editor td { vertical-align:middle; padding:6px 8px; } .steps-editor .center { text-align:center; }
+.steps-editor input[type=radio] { width:22px; height:22px; accent-color:var(--brand); }
+.steps-editor tbody tr { cursor:default; }
+.order-buttons { white-space:nowrap; } .order-buttons button { background:#e9edf1; margin-right:2px; } .order-buttons button.danger { background:var(--red); }
+button:disabled { opacity:.35; cursor:default; }
+.hints { color:var(--muted); font-size:15px; } .notice { background:var(--green); color:var(--green-ink); padding:10px 14px; border-radius:6px; } .notice.warn { background:var(--yellow); color:var(--yellow-ink); }
+.work-types li { margin:6px 0; } .work-types a { font-weight:700; color:var(--ink); } .hidden-mark { color:var(--red-ink); }
+div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
 .error { background:var(--red); color:var(--red-ink); padding:10px 14px; border-radius:6px; }
 .empty { background:#fff; padding:20px; }

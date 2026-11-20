@@ -9,12 +9,17 @@ import {
   type SettingsHistoryEntry,
 } from '../modules/settings/settings-service.js';
 import type { DaysOff } from '../modules/settings/days-off-repository.js';
+import type { WorkType } from '../modules/work-types/work-type-repository.js';
+import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin.js';
+import { workTypesSection } from './work-type-views.js';
 
 /** Co pokazać w formularzu: zapisane ustawienia albo to, co ktoś właśnie wpisał (przy błędzie). */
 export interface SettingsView {
   values: Record<string, string>;
   history: SettingsHistoryEntry[];
   daysOff: DaysOff[];
+  workTypes: WorkType[];
+  workTypeHistory: WorkTypeHistoryEntry[];
 }
 
 /** Ustawienia jako wartości pól formularza (przełącznik: '1' = włączony, brak = wyłączony). */
@@ -44,7 +49,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
       ${personButtons('/ustawienia/progi/domyslne', 'Przywróć domyślne', people, 'danger')}
     </details>
     ${fold('settings-history', `Historia zmian ustawień (${view.history.length})`, historyList(view.history))}
-    ${daysOffSection(view.daysOff, people)}
+    ${workTypesSection(view.workTypes, view.workTypeHistory)} ${daysOffSection(view.daysOff, people)}
     <h3>Osoby (przyciski „kto zrobił”)</h3>
     <ul class="people-list">
       ${people.map(
