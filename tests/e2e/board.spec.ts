@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { clickAndConfirm } from './confirm.js';
 
 test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie, historia', async ({ page }) => {
   const client = `Klient E2E ${Date.now()}`;
@@ -20,7 +21,7 @@ test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie,
 
   // Historia jest zwinięta; po rozwinięciu przeglądarka pamięta to także po przeładowaniu strony.
   await panel.getByText(/^Historia \(\d+\)$/).click();
-  await panel.getByRole('button', { name: 'Zrobione: Bartek' }).click();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }));
   await expect(panel.getByText('Zrobione kroki (1)')).toBeVisible();
   await expect(panel.getByText('Bartek: zrobione „Ustalenie terminu pomiaru w terenie”')).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
@@ -28,7 +29,7 @@ test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie,
   );
 
   await panel.getByText('Cofnij ostatnie odhaczenie (pomyłka)').click();
-  await panel.getByRole('button', { name: 'Cofnij: Marcelina' }).click();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Cofnij: Marcelina' }));
   await expect(panel.getByText('Marcelina: cofnięcie „Ustalenie terminu pomiaru w terenie”')).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
     'Ustalenie terminu pomiaru w terenie',
@@ -63,4 +64,39 @@ test('wyszukiwarka na Tablicy pokazuje tylko pasujące zlecenia', async ({ page 
 
   await page.getByRole('searchbox', { name: 'Szukaj' }).fill('nie ma takiego klienta xyz');
   await expect(page.getByText('Nic nie pasuje do wyszukiwania.')).toBeVisible();
+});
+
+test('okienko „Czy na pewno?”: Anuluj nic nie zapisuje, „Tak, zapisz” odhacza krok', async ({ page }) => {
+  const client = `Potwierdzenie E2E ${Date.now()}`;
+  await page.goto('/zlecenia/nowe');
+  await page.getByLabel('Klient').fill(client);
+  await page.getByLabel('Telefon').fill('600 100 200');
+  await page.getByLabel('Miejscowość').fill('Przykładowo');
+  await page.getByLabel('Data pomiaru').fill('2030-01-15');
+  await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+
+  const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
+  await panel.getByRole('button', { name: 'Zrobione: Bartek' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Czy na pewno?' });
+  await expect(dialog).toContainText('Zrobione: Bartek');
+  await dialog.getByRole('button', { name: 'Anuluj' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(panel.getByText('Zrobione kroki')).toHaveCount(0);
+
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }));
+  await expect(panel.getByText('Zrobione kroki (1)')).toBeVisible();
+});
+
+test('kroki do zrobienia można zwinąć i rozwinąć', async ({ page }) => {
+  await page.goto('/zlecenia/nowe');
+  await page.getByLabel('Klient').fill(`Zwijanie E2E ${Date.now()}`);
+  await page.getByLabel('Telefon').fill('600 100 200');
+  await page.getByLabel('Miejscowość').fill('Przykładowo');
+  await page.getByLabel('Data pomiaru').fill('2030-01-15');
+  await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+
+  const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
+  await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeHidden();
+  await panel.getByText(/^Do zrobienia \(\d+\)$/).click();
+  await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeVisible();
 });

@@ -19,13 +19,14 @@ export class PageRenderer {
     /** Co ile sekund odświeżać ekran (z Ustawień). */
     readonly refreshSeconds: () => number,
     readonly counts: () => NavCounts,
+    private readonly confirmActions: () => boolean = () => true,
   ) {}
 
   send(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
     return reply
       .code(status)
       .type('text/html; charset=utf-8')
-      .send(layout(title, body, this.refreshSeconds(), this.counts()));
+      .send(layout(title, body, this.refreshSeconds(), this.counts(), this.confirmActions()));
   }
 }
 

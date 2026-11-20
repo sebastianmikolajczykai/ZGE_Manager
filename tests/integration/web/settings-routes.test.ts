@@ -13,6 +13,7 @@ const THRESHOLDS = {
   redAfterIdleDays: '3',
   warnDaysBeforeLimit: '1',
   blinkEnabled: '1',
+  confirmActions: '1',
   blinkAfterRedDays: '7',
   offerFollowUpDays: '7',
   refreshSeconds: '60',
@@ -62,6 +63,7 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     expect(page).toContain('Kolory i przypomnienia');
     expect(page).toMatch(/name="redAfterIdleDays"[^>]*value="3"/);
     expect(page).toMatch(/name="blinkEnabled"[^>]*checked/);
+    expect(page).toMatch(/name="confirmActions"[^>]*checked/);
     expect(page).toContain('Zapisz: Anna');
   });
 
@@ -72,6 +74,12 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
       expect(page).toContain(`aria-label="Zwiększ: ${label}"`);
     }
     expect(page).not.toContain('aria-label="Zwiększ: Miganie włączone"');
+  });
+
+  it('the "Czy na pewno?" window is on by default and can be switched off in Ustawienia', async () => {
+    expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('<dialog id="potwierdz"');
+    await saveThresholds({ confirmActions: '' });
+    expect((await app.inject({ method: 'GET', url: '/' })).body).not.toContain('<dialog id="potwierdz"');
   });
 
   it('saves a change, shows the new value and logs who changed it', async () => {

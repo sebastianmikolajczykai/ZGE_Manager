@@ -47,6 +47,7 @@ export function layout(
   body: SafeHtml,
   refreshSeconds = DEFAULT_REFRESH_SECONDS,
   counts: NavCounts = NO_COUNTS,
+  confirmActions = true,
 ): string {
   return html`<!doctype html>
     <html lang="pl">
@@ -63,12 +64,25 @@ export function layout(
           ${sideMenu(counts, refreshSeconds)}
           <main>${body}</main>
         </div>
+        ${confirmActions ? CONFIRM_DIALOG : ''}
         <script>
           ${trustedScript(refreshSeconds)};
         </script>
       </body>
     </html>`.value;
 }
+
+/** Okienko „Czy na pewno?” na środku ekranu; skrypt strony wpisuje w nie, co ktoś kliknął. */
+const CONFIRM_DIALOG = html`<dialog id="potwierdz" aria-labelledby="potwierdz-tytul">
+  <form method="dialog">
+    <p class="ask-title" id="potwierdz-tytul">Czy na pewno?</p>
+    <p class="ask-what" id="potwierdz-co"></p>
+    <div class="ask-buttons">
+      <button value="anuluj" class="secondary big" autofocus>Anuluj</button>
+      <button value="tak" class="primary big">Tak, zapisz</button>
+    </div>
+  </form>
+</dialog>`;
 
 /** Menu boczne: logo, żółty przycisk „+ Dodaj zlecenie”, zakładki z licznikami. */
 function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
@@ -342,16 +356,19 @@ function calendarButton(order: Order, workTypeName: string): SafeHtml {
   >`;
 }
 
-/** Zrobione kroki zwinięte pod strzałką, aktywny i kolejne widoczne (z oryginalnymi numerami). */
+/** Zrobione kroki i kroki do zrobienia zwinięte pod strzałkami, bieżący krok zawsze widoczny (numery jak w rodzaju pracy). */
 function stepsSection(order: Order, people: Person[], urgency: Urgency | null): SafeHtml {
   const done = order.steps.filter((s) => s.status === 'done');
-  const open = order.steps.filter((s) => s.status !== 'done');
+  const current = order.steps.filter((s) => s.status === 'active');
+  const todo = order.steps.filter((s) => s.status === 'pending');
   const list = (steps: OrderStep[]) =>
     html`<ol class="steps">
       ${steps.map((s) => stepItem(order, s, people, urgency))}
     </ol>`;
   return html`${done.length > 0 ? fold('steps-done', `Zrobione kroki (${done.length})`, list(done)) : ''}
-  ${open.length > 0 ? list(open) : ''} ${done.length > 0 ? undoForm(order.id, people) : ''}`;
+  ${current.length > 0 ? list(current) : ''}
+  ${todo.length > 0 ? fold('steps-todo', `Do zrobienia (${todo.length})`, list(todo)) : ''}
+  ${done.length > 0 ? undoForm(order.id, people) : ''}`;
 }
 
 /** Historia zlecenia (najnowsze na górze), zwijana. Używana też w zakładce Niezapłacone. */
@@ -615,11 +632,29 @@ document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 });
+// Okienko „Czy na pewno?”: kliknięcie osoby na karcie trzeba potwierdzić drugim kliknięciem „Tak, zapisz”.
+var ask = document.getElementById('potwierdz');
+if (ask) document.querySelectorAll('.detail form.people').forEach(function (form) {
+  form.addEventListener('submit', function (e) {
+    if (form.getAttribute('data-confirmed') === '1') return;
+    e.preventDefault();
+    var button = e.submitter;
+    document.getElementById('potwierdz-co').textContent = button ? button.getAttribute('data-label') : '';
+    ask.returnValue = '';
+    ask.onclose = function () {
+      if (ask.returnValue !== 'tak') return;
+      form.setAttribute('data-confirmed', '1');
+      form.requestSubmit(button);
+    };
+    ask.showModal();
+  });
+});
 setInterval(function () {
   var busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   var openForm = document.querySelector('details[open]:not(.fold)');
   var searching = document.getElementById('szukaj') && document.getElementById('szukaj').value;
-  if (!busy && !openForm && !searching && ['/', '/oferty', '/niezaplacone'].indexOf(location.pathname) >= 0) location.reload();
+  var asking = document.querySelector('dialog[open]');
+  if (!busy && !openForm && !searching && !asking && ['/', '/oferty', '/niezaplacone'].indexOf(location.pathname) >= 0) location.reload();
 }, REFRESH_MS);`;
 
 const STYLES = `
@@ -771,6 +806,11 @@ div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .summary { display:flex; gap:32px; background:#fff; border-radius:14px; box-shadow:var(--shadow); padding:12px 18px; margin-bottom:14px; }
 .summary span { color:var(--muted); font-size:15px; } .summary b { display:block; font-size:24px; } .summary b.late { color:var(--red-ink); }
 .people-list li { display:flex; gap:12px; align-items:center; margin:6px 0; } .people-list form { margin:0; }
+/* Okienko „Czy na pewno?” */
+dialog#potwierdz { border:0; border-radius:18px; padding:26px 30px; box-shadow:0 20px 60px rgba(0,0,0,.35); text-align:center; min-width:380px; }
+dialog#potwierdz::backdrop { background:rgba(15,61,36,.55); }
+.ask-title { font-size:24px; font-weight:800; margin:0 0 8px; } .ask-what { font-size:20px; font-weight:600; margin:0 0 20px; color:var(--brand-dark); }
+.ask-buttons { display:flex; gap:12px; justify-content:center; }
 /* Mniejszy ekran laptopa: w tabeli sama ikona statusu (słowo zostaje dla czytników ekranu), węższe odstępy. */
 .detail-head { flex-wrap:wrap; }
 @media (max-width:1500px) {

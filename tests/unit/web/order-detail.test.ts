@@ -83,10 +83,24 @@ describe('karta zlecenia: zwijane sekcje', () => {
     expect(page).toMatch(/<details class="fold" data-fold="steps-done">/);
   });
 
-  it('keeps the active and upcoming steps visible with their original numbers', () => {
+  it('keeps the active step visible and the upcoming ones with their original numbers', () => {
     const page = render([step(1, 'done'), step(2, 'done'), step(3, 'active'), step(4, 'pending')]);
     expect(page).toMatch(/<li value="3" class="step active">/);
     expect(page).toMatch(/<li value="4" class="step pending">/);
+  });
+
+  it('puts the steps still to do in their own collapsible section, the active step stays outside', () => {
+    const page = render([step(1, 'done'), step(2, 'active'), step(3, 'pending'), step(4, 'pending')]);
+    const todo = fold(page, 'steps-todo');
+    expect(todo).toContain('Do zrobienia (2)');
+    expect(todo).toContain('Krok 3');
+    expect(todo).toContain('Krok 4');
+    expect(todo).not.toContain('Krok 2');
+    expect(page.indexOf('data-fold="steps-todo"')).toBeGreaterThan(page.indexOf('<li value="2"'));
+  });
+
+  it('shows no to-do section on the last step', () => {
+    expect(render([step(1, 'done'), step(2, 'active')])).not.toContain('data-fold="steps-todo"');
   });
 
   it('shows no done-steps section before anything is ticked', () => {

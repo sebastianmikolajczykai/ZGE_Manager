@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { clickAndConfirm } from './confirm.js';
 
 async function addOrder(page: Page, client: string, lead: string): Promise<void> {
   await page.goto('/zlecenia/nowe');
@@ -37,7 +38,7 @@ test('filtr „Moje”: osoba prowadząca, przypisanie kroku i zapamiętanie oso
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   await panel.getByText('Osoby w zleceniu').click();
   await panel.getByLabel('Osoba do kroku 1', { exact: true }).selectOption('Bartek');
-  await panel.getByRole('button', { name: 'Zapisz osoby: Łukasz' }).click();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zapisz osoby: Łukasz' }));
   await panel.getByText(/^Historia \(\d+\)$/).click();
   await expect(
     panel.getByText('Łukasz: osoba do kroku „Ustalenie terminu pomiaru w terenie” (brak → Bartek)'),
