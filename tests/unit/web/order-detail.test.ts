@@ -153,3 +153,33 @@ describe('karta zlecenia: zmiana limitu w tym zleceniu', () => {
     expect(render([daily])).not.toContain('Zmień limit tego kroku');
   });
 });
+
+describe('karta zlecenia: styl C', () => {
+  it('marks the active step as "CO TERAZ" with its limit', () => {
+    const page = render([step(1, 'done'), step(2, 'active'), step(3, 'pending')]);
+    const active = page.slice(page.indexOf('<li value="2"'), page.indexOf('<li value="3"'));
+    expect(active).toContain('CO TERAZ');
+    expect(active).toContain('limit 2 dni rob.');
+  });
+
+  it('says how many days the active step is late', () => {
+    const late = orderDetail(
+      order([step(1, 'active')]),
+      'Podział',
+      { colour: 'red', daysOverdue: 4, blink: false },
+      HISTORY,
+      PEOPLE,
+    ).value;
+    expect(late).toContain('4 dni po terminie');
+    expect(late).toContain('chip chip-red');
+  });
+
+  it('shows step progress of the whole order', () => {
+    expect(render([step(1, 'done'), step(2, 'active'), step(3, 'pending')])).toContain('krok 2/3');
+  });
+
+  it('shows the person colour next to each history entry', () => {
+    const history = fold(render([step(1, 'done'), step(2, 'active')]), 'history');
+    expect(history).toMatch(/class="av"[^>]*>B</);
+  });
+});

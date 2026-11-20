@@ -11,9 +11,9 @@ describe('layout (wygląd w stylu ZGE)', () => {
     expect(page).toContain('>ZGE<');
   });
 
-  it('uses the ZGE colours: black header and green from geodezja-zge.pl', () => {
+  it('uses the ZGE green (geodezja-zge.pl) and the dark green side menu of design C', () => {
     expect(page).toContain('--brand:#189400');
-    expect(page).toContain('--header:#000');
+    expect(page).toContain('--side:#0f3d24');
   });
 
   it('keeps CSS and the auto-refresh script unescaped (otherwise the browser ignores them)', () => {
@@ -34,5 +34,38 @@ describe('layout (wygląd w stylu ZGE)', () => {
     const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
     expect(script).toContain('localStorage');
     expect(script).toContain('data-fold');
+  });
+
+  it('is checked: an invalid refresh time is refused', () => {
+    expect(() => layout('x', html``, 0)).toThrow('Nieprawidłowy czas odświeżania');
+  });
+
+  it('does not reload the list while something is typed in the search box', () => {
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    expect(script).toContain("getElementById('szukaj')");
+  });
+});
+
+describe('layout: menu boczne (styl C)', () => {
+  const page = layout('Tablica', html`<p>treść</p>`, 60, { offersToCall: 2, unpaidToRemind: 0 }).toString();
+  const menu = page.slice(page.indexOf('<aside'), page.indexOf('</aside>'));
+
+  it('has the side menu with all screens and the yellow "+ Dodaj zlecenie" button', () => {
+    for (const href of ['/', '/oferty', '/niezaplacone', '/ustawienia'])
+      expect(menu).toContain(`href="${href}"`);
+    expect(menu).toMatch(/class="add"[^>]*>\s*\+ Dodaj zlecenie/);
+  });
+
+  it('shows how many offers wait for a call, and no badge when nothing waits', () => {
+    expect(menu).toMatch(/href="\/oferty"[\s\S]*?class="badge"[^>]*>2</);
+    expect(menu.slice(menu.indexOf('href="/niezaplacone"'))).not.toMatch(
+      /^[^\n]*?class="badge"[^<]*<\/span>\s*<\/a>/,
+    );
+    expect(menu).not.toContain('>0<');
+  });
+
+  it('keeps icons and badges out of link names (screen readers and tests read "Oferty")', () => {
+    expect(menu).toMatch(/<span class="ic" aria-hidden="true">/);
+    expect(menu).toMatch(/class="badge" aria-hidden="true"/);
   });
 });

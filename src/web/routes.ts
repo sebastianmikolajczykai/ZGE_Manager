@@ -6,7 +6,7 @@ import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import type { OfferService } from '../modules/offers/offer-service.js';
-import { boardPage, orderDetail, orderForm, type OrderFormValues } from './views.js';
+import { boardPage, orderDetail, orderForm, parseColourFilter, type OrderFormValues } from './views.js';
 import { settingsFormValues, settingsPage } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
@@ -49,8 +49,9 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   app.addHook('preHandler', rejectForeignOrigin);
 
   app.get('/', (req, reply) => {
-    const id = Number((req.query as Form).zlecenie);
-    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null);
+    const query = req.query as Form;
+    const id = Number(query.zlecenie);
+    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null, 200, query.kolor);
   });
 
   app.get('/zlecenia/nowe', (req, reply) => {
@@ -198,7 +199,9 @@ function renderBoard(
   orderId: number | null,
   error: string | null,
   status = 200,
+  colour?: string,
 ) {
+  const options = { counts: s.pages.counts(), filter: parseColourFilter(colour) };
   let detail = null;
   if (orderId !== null) {
     const order = s.orders.get(orderId);
@@ -206,7 +209,7 @@ function renderBoard(
       return s.pages.send(
         reply,
         'Nie znaleziono',
-        boardPage(s.board.rows(), null, `Nie ma zlecenia o numerze ${orderId}`),
+        boardPage(s.board.rows(), null, `Nie ma zlecenia o numerze ${orderId}`, null, options),
         HTTP_NOT_FOUND,
       );
     const active = order.steps.find((st) => st.status === 'active');
@@ -214,7 +217,12 @@ function renderBoard(
     const workType = s.workTypes.findById(order.workTypeId)?.name ?? '?';
     detail = orderDetail(order, workType, urgency, s.orders.history(orderId), s.people.list());
   }
-  return s.pages.send(reply, 'ZGE Menedżer', boardPage(s.board.rows(), detail, error, orderId), status);
+  return s.pages.send(
+    reply,
+    'ZGE Menedżer',
+    boardPage(s.board.rows(), detail, error, orderId, options),
+    status,
+  );
 }
 
 /** Ochrona przed formularzem wysłanym z obcej strony (CSRF): POST tylko z tej samej aplikacji. */

@@ -43,10 +43,17 @@ export function buildApp({
   const workTypeAdmin = new WorkTypeAdmin(workTypes, db, today);
   // Funkcje zamiast wartości: zmiana w Ustawieniach działa od razu, bez restartu.
   const rules = new UrgencyRules(() => settings.urgency());
-  const pages = new PageRenderer(() => settings.get().refreshSeconds);
   const board = new BoardService(db, orders, rules, today);
   const offers = new OfferService(db, today, rules, () => settings.get().offerFollowUpDays);
   const payments = new PaymentService(db, orders, rules, today);
+  const isRed = (row: { urgency: { colour: string } }) => row.urgency.colour === 'red';
+  const pages = new PageRenderer(
+    () => settings.get().refreshSeconds,
+    () => ({
+      offersToCall: offers.rows().filter(isRed).length,
+      unpaidToRemind: payments.rows().filter(isRed).length,
+    }),
+  );
 
   app.get('/health', async (_req, reply) => {
     try {

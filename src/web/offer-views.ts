@@ -1,5 +1,14 @@
 import { html, type SafeHtml } from './html.js';
-import { fold, formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
+import {
+  avatar,
+  fold,
+  formatDate,
+  formatPrice,
+  personButtons,
+  personTag,
+  rowClass,
+  statusChip,
+} from './view-helpers.js';
 import type { Offer, OfferHistoryEntry, OfferRow, OfferStatus } from '../modules/offers/offer-service.js';
 import type { Person } from '../modules/people/people-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
@@ -24,7 +33,10 @@ export function offersPage(
   selectedId: number | null = null,
 ): SafeHtml {
   return html` ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
-    <p class="page-actions"><a class="button primary" href="/oferty/nowa">+ Dodaj ofertę</a></p>
+    <div class="page-head">
+      <h1>Oferty</h1>
+      <p class="page-actions"><a class="button primary" href="/oferty/nowa">+ Dodaj ofertę</a></p>
+    </div>
     <div class="split">
       <section class="board" aria-label="Lista ofert">
         ${rows.length === 0 ? html`<p class="empty">Brak otwartych ofert.</p>` : offersTable(rows, selectedId)}
@@ -37,12 +49,12 @@ function offersTable(rows: OfferRow[], selectedId: number | null): SafeHtml {
   return html`<table>
     <thead>
       <tr>
+        <th>Status</th>
         <th>Klient</th>
         <th>Miejscowość</th>
-        <th>Rodzaj pracy</th>
-        <th>Cena</th>
+        <th class="num">Cena</th>
         <th>Wysłana</th>
-        <th>Dni od kontaktu</th>
+        <th class="num">Dni od kontaktu</th>
         <th>Kto</th>
       </tr>
     </thead>
@@ -53,15 +65,13 @@ function offersTable(rows: OfferRow[], selectedId: number | null): SafeHtml {
             class="${rowClass(r.urgency)}${r.offerId === selectedId ? ' selected' : ''}"
             onclick="location.href='/oferty?oferta=${r.offerId}'"
           >
-            <td><a href="/oferty?oferta=${r.offerId}">${r.clientName}</a></td>
+            <td>${statusChip(r.urgency.colour, OFFER_COLOUR_LABEL[r.urgency.colour])}</td>
+            <td><a href="/oferty?oferta=${r.offerId}">${r.clientName}</a><small>${r.workTypeName}</small></td>
             <td>${r.town ?? '–'}</td>
-            <td>${r.workTypeName}</td>
             <td class="num">${formatPrice(r.pricePln)}</td>
             <td>${formatDate(r.sentOn)}</td>
-            <td class="num">
-              ${r.daysSinceContact}${r.urgency.colour === 'green' ? '' : html`<br /><small>${OFFER_COLOUR_LABEL[r.urgency.colour]}</small>`}
-            </td>
-            <td>${r.lastPerson}</td>
+            <td class="num"><b>${r.daysSinceContact}</b></td>
+            <td>${personTag(r.lastPerson)}</td>
           </tr>`,
       )}
     </tbody>
@@ -78,10 +88,16 @@ export function offerDetail(
 ): SafeHtml {
   const open = offer.status === 'open';
   return html`<section class="detail" aria-label="Szczegóły oferty">
-    <h2>${offer.clientName}</h2>
-    <p class="status ${open ? rowClass(urgency) : 'done'}">
-      ${open ? OFFER_COLOUR_LABEL[urgency.colour] : CLOSED_LABEL[offer.status as Exclude<OfferStatus, 'open'>]}
-    </p>
+    <div class="detail-head">
+      <h2>${offer.clientName}</h2>
+      ${
+        open
+          ? statusChip(urgency.colour, OFFER_COLOUR_LABEL[urgency.colour])
+          : html`<span class="chip chip-done"
+              >${CLOSED_LABEL[offer.status as Exclude<OfferStatus, 'open'>]}</span
+            >`
+      }
+    </div>
     <dl>
       <dt>Telefon</dt>
       <dd><a href="tel:${offer.phone}">${offer.phone}</a></dd>
@@ -117,7 +133,12 @@ export function offerDetail(
       'history',
       `Historia (${history.length})`,
       html`<ul class="history">
-        ${[...history].reverse().map((h) => html`<li><time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`)}
+        ${[...history]
+          .reverse()
+          .map(
+            (h) =>
+              html`<li>${avatar(h.person)}<time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`,
+          )}
       </ul>`,
     )}
   </section>`;
@@ -132,8 +153,8 @@ function offerActions(offer: Offer, people: Person[], reminderDays: number): Saf
       roboczych</label
     >
     <label class="choice"><input type="radio" name="next" value="end" /> Kontakt zakończony</label>`;
-  return html`<h3>Telefon do klienta</h3>
-    <div class="offer-call">
+  return html`<div class="offer-call">
+      <p class="now-label">CO TERAZ · 📞 TELEFON DO KLIENTA</p>
       ${personButtons(`/oferty/${offer.id}/telefon`, 'Rozmowa', people, 'primary', callFields)}
     </div>
     <p><a class="button secondary" href="/zlecenia/nowe?oferta=${offer.id}">Przyjęta → zrób zlecenie</a></p>

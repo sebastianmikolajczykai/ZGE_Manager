@@ -44,6 +44,19 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     post('/ustawienia/progi', { ...THRESHOLDS, ...change, person });
   const settingsPage = async () => (await app.inject({ method: 'GET', url: '/ustawienia' })).body;
 
+  it('has a short menu jumping to each settings section', async () => {
+    const page = await settingsPage();
+    for (const [id, name] of [
+      ['kolory', 'Kolory i przypomnienia'],
+      ['rodzaje-prac', 'Rodzaje prac'],
+      ['dni-wolne', 'Dni wolne firmy'],
+      ['osoby', 'Osoby'],
+    ]) {
+      expect(page).toContain(`href="#${id}"`);
+      expect(page).toMatch(new RegExp(`<h3 id="${id}">${name}`));
+    }
+  });
+
   it('shows the current values in editable fields with "Zapisz: osoba" buttons', async () => {
     const page = await settingsPage();
     expect(page).toContain('Kolory i przypomnienia');

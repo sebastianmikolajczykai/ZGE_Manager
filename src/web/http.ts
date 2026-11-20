@@ -1,6 +1,6 @@
 import type { FastifyReply } from 'fastify';
 import type { SafeHtml } from './html.js';
-import { layout } from './views.js';
+import { layout, type NavCounts } from './views.js';
 
 /** Pola formularza po odczytaniu (nazwa → wartość). */
 export type Form = Record<string, string>;
@@ -10,15 +10,21 @@ export const HTTP_BAD_REQUEST = 400;
 export const HTTP_FORBIDDEN = 403;
 export const HTTP_NOT_FOUND = 404;
 
-/** Wysyła stronę w układzie aplikacji; co ile sekund odświeżać ekran, bierze z Ustawień. */
+/**
+ * Wysyła stronę w układzie aplikacji; co ile sekund odświeżać ekran, bierze z Ustawień,
+ * a liczniki w menu (oferty do telefonu, przypomnienia o zapłacie) liczy przy każdej stronie.
+ */
 export class PageRenderer {
-  constructor(private readonly refreshSeconds: () => number) {}
+  constructor(
+    private readonly refreshSeconds: () => number,
+    readonly counts: () => NavCounts,
+  ) {}
 
   send(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
     return reply
       .code(status)
       .type('text/html; charset=utf-8')
-      .send(layout(title, body, this.refreshSeconds()));
+      .send(layout(title, body, this.refreshSeconds(), this.counts()));
   }
 }
 
