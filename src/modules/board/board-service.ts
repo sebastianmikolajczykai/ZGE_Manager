@@ -1,5 +1,5 @@
 import type { AppDatabase } from '../../db.js';
-import { DayCounter, type LocalDate } from '../urgency/day-counter.js';
+import type { LocalDate } from '../urgency/day-counter.js';
 import { UrgencyRules, type Urgency } from '../urgency/urgency-rules.js';
 import type { Order, OrderService, OrderStep } from '../orders/order-service.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
@@ -23,7 +23,6 @@ export interface BoardRow {
 /** Składa tablicę: aktywne zlecenia, ich bieżący krok, kolor i kolejność pilności. */
 export class BoardService {
   private readonly workTypes: WorkTypeRepository;
-  private readonly days = new DayCounter('working');
 
   constructor(
     private readonly db: AppDatabase,
@@ -73,7 +72,7 @@ export class BoardService {
       currentStepName: step.name,
       currentStepPosition: step.position,
       stepCount: order.steps.length,
-      daysOnStep: this.days.daysBetween(step.startedOn ?? order.receivedOn, today),
+      daysOnStep: this.rules.daysBetween(step.startedOn ?? order.receivedOn, today),
       lastPerson: this.lastPerson(order.id),
       pricePln: order.pricePln,
       urgency,

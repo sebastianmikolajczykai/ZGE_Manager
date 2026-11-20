@@ -23,6 +23,7 @@ import {
   type PageRenderer,
 } from './http.js';
 import type { SettingsService } from '../modules/settings/settings-service.js';
+import type { DaysOffRepository } from '../modules/settings/days-off-repository.js';
 
 export interface WebServices {
   orders: OrderService;
@@ -33,6 +34,7 @@ export interface WebServices {
   payments: PaymentService;
   today: () => LocalDate;
   settings: SettingsService;
+  daysOff: DaysOffRepository;
   pages: PageRenderer;
 }
 
@@ -123,6 +125,21 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     }
   });
 
+  app.post('/ustawienia/dni-wolne', (req, reply) => {
+    const form = req.body as Form;
+    try {
+      const input = { fromOn: form.fromOn ?? '', toOn: form.toOn ?? '', note: form.note ?? null };
+      s.daysOff.add(input, form.person ?? '');
+      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+    } catch (err) {
+      return renderSettings(reply, s, message(err));
+    }
+  });
+  app.post('/ustawienia/dni-wolne/:id/usun', (req, reply) => {
+    s.daysOff.remove(Number((req.params as Form).id));
+    return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+  });
+
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
 }
@@ -134,7 +151,11 @@ function renderSettings(
   error: string | null,
   typed: Form | null = null,
 ) {
-  const view = { values: typed ?? settingsFormValues(s.settings.get()), history: s.settings.history() };
+  const view = {
+    values: typed ?? settingsFormValues(s.settings.get()),
+    history: s.settings.history(),
+    daysOff: s.daysOff.list(s.today()),
+  };
   return s.pages.send(
     reply,
     'Ustawienia',

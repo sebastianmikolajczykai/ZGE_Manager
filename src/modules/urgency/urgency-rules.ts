@@ -1,4 +1,5 @@
 import { DayCounter, type DayMode, type LocalDate } from './day-counter.js';
+import { PolishHolidays } from './polish-holidays.js';
 
 export type Colour = 'green' | 'yellow' | 'red';
 
@@ -14,7 +15,17 @@ export interface UrgencySettings {
   /** Miganie, gdy sprawa jest czerwona dłużej niż tyle dni. */
   blinkAfterRedDays: number;
   dayMode: DayMode;
+  /** Dni wolne firmy (urlop itp.): nie liczą się, tak jak święta. */
+  isDayOff?: (date: LocalDate) => boolean;
 }
+
+/** Ustawienia i licznik dni z jednej chwili (żeby jedno sprawdzenie nie mieszało starych i nowych ustawień). */
+interface Snapshot {
+  settings: UrgencySettings;
+  counter: DayCounter;
+}
+
+const SHARED_HOLIDAYS = new PolishHolidays();
 
 export const DEFAULT_URGENCY_SETTINGS: UrgencySettings = {
   yellowAfterIdleDays: 2,
@@ -52,43 +63,37 @@ const COLOUR_RANK: Record<Colour, number> = { red: 2, yellow: 1, green: 0 };
 /** Reguły kolorów i kolejności spraw na tablicy. */
 export class UrgencyRules {
   private readonly source: () => UrgencySettings;
-  private readonly counters = new Map<DayMode, DayCounter>();
-
   /** `settings` może być funkcją: wtedy przy każdym sprawdzeniu bierzemy aktualne ustawienia (zmiana w Ustawieniach działa od razu). */
   constructor(settings: UrgencySettings | (() => UrgencySettings)) {
     this.source = typeof settings === 'function' ? settings : () => settings;
     validateSettings(this.source());
   }
 
-  private get settings(): UrgencySettings {
-    return this.source();
+  private snapshot(): Snapshot {
+    const settings = this.source();
+    return { settings, counter: new DayCounter(settings.dayMode, SHARED_HOLIDAYS, settings.isDayOff) };
   }
 
-  private get counter(): DayCounter {
-    const mode = this.settings.dayMode;
-    let counter = this.counters.get(mode);
-    if (!counter) {
-      counter = new DayCounter(mode);
-      this.counters.set(mode, counter);
-    }
-    return counter;
+  /** Dni (robocze, bez świąt i dni wolnych firmy) między datami – do kolumn „dni na kroku” itp. */
+  daysBetween(from: LocalDate, to: LocalDate): number {
+    return this.snapshot().counter.daysBetween(from, to);
   }
 
   evaluate(step: StepState, today: LocalDate): Urgency {
-    this.validateStep(step);
-    const idle = this.counter.daysBetween(step.lastActivityOn, today);
-    const elapsed = this.counter.daysBetween(step.startedOn, today);
+    const { settings, counter } = this.snapshot();
+    validateStep(step, counter);
+    const idle = counter.daysBetween(step.lastActivityOn, today);
+    const elapsed = counter.daysBetween(step.startedOn, today);
     const daysToLimit = step.limitDays === null ? null : step.limitDays - elapsed;
 
     const idleRules = step.kind === 'own';
-    const idleOverdue = idleRules ? idle - this.settings.redAfterIdleDays + 1 : 0;
+    const idleOverdue = idleRules ? idle - settings.redAfterIdleDays + 1 : 0;
     const limitOverdue = daysToLimit === null ? 0 : 1 - daysToLimit;
     const daysOverdue = Math.max(0, idleOverdue, limitOverdue);
 
-    const nearLimit =
-      daysToLimit !== null && daysToLimit >= 1 && daysToLimit <= this.settings.warnDaysBeforeLimit;
-    const idleWarning = idleRules && idle >= this.settings.yellowAfterIdleDays;
-    return this.fromOverdue(daysOverdue, nearLimit || idleWarning);
+    const nearLimit = daysToLimit !== null && daysToLimit >= 1 && daysToLimit <= settings.warnDaysBeforeLimit;
+    const idleWarning = idleRules && idle >= settings.yellowAfterIdleDays;
+    return fromOverdue(settings, daysOverdue, nearLimit || idleWarning);
   }
 
   /**
@@ -96,31 +101,17 @@ export class UrgencyRules {
    * następny dzień roboczy bez kontroli = żółty, kolejny = czerwony.
    */
   evaluateDaily(lastCheckedOrStartedOn: LocalDate, today: LocalDate): Urgency {
-    const idle = this.counter.daysBetween(lastCheckedOrStartedOn, today);
-    return this.fromOverdue(idle - 1, idle === 1);
+    const { settings, counter } = this.snapshot();
+    const idle = counter.daysBetween(lastCheckedOrStartedOn, today);
+    return fromOverdue(settings, idle - 1, idle === 1);
   }
 
   /** Krok w ustalonym dniu (np. pomiar): przed terminem zielony, w dniu terminu żółty, po nim czerwony. */
   evaluateScheduled(scheduledOn: LocalDate, today: LocalDate): Urgency {
     if (today < scheduledOn) return { colour: 'green', daysOverdue: 0, blink: false };
-    const daysAfter = this.counter.daysBetween(scheduledOn, today);
-    return this.fromOverdue(daysAfter, daysAfter === 0);
-  }
-
-  private fromOverdue(daysOverdue: number, warning: boolean): Urgency {
-    if (daysOverdue > 0) {
-      const { blinkEnabled, blinkAfterRedDays } = this.settings;
-      return { colour: 'red', daysOverdue, blink: blinkEnabled && daysOverdue > blinkAfterRedDays };
-    }
-    return { colour: warning ? 'yellow' : 'green', daysOverdue: 0, blink: false };
-  }
-
-  private validateStep(step: StepState): void {
-    if (step.limitDays !== null && (!Number.isInteger(step.limitDays) || step.limitDays < 1)) {
-      throw new Error(`Limit kroku musi być liczbą całkowitą co najmniej 1 (jest ${step.limitDays})`);
-    }
-    // Rzuca błąd, gdy ostatni ruch jest wcześniejszy niż start kroku.
-    this.counter.daysBetween(step.startedOn, step.lastActivityOn);
+    const { settings, counter } = this.snapshot();
+    const daysAfter = counter.daysBetween(scheduledOn, today);
+    return fromOverdue(settings, daysAfter, daysAfter === 0);
   }
 
   /** Do Array.sort: najdłużej czerwone na górze, potem żółte, zielone; przy remisie najdłużej czekające. */
@@ -141,4 +132,20 @@ function validateSettings(s: UrgencySettings): void {
   if (s.yellowAfterIdleDays > s.redAfterIdleDays) {
     throw new Error('Próg żółty nie może być większy niż próg czerwony');
   }
+}
+
+function fromOverdue(settings: UrgencySettings, daysOverdue: number, warning: boolean): Urgency {
+  if (daysOverdue > 0) {
+    const blink = settings.blinkEnabled && daysOverdue > settings.blinkAfterRedDays;
+    return { colour: 'red', daysOverdue, blink };
+  }
+  return { colour: warning ? 'yellow' : 'green', daysOverdue: 0, blink: false };
+}
+
+function validateStep(step: StepState, counter: DayCounter): void {
+  if (step.limitDays !== null && (!Number.isInteger(step.limitDays) || step.limitDays < 1)) {
+    throw new Error(`Limit kroku musi być liczbą całkowitą co najmniej 1 (jest ${step.limitDays})`);
+  }
+  // Rzuca błąd, gdy ostatni ruch jest wcześniejszy niż start kroku.
+  counter.daysBetween(step.startedOn, step.lastActivityOn);
 }

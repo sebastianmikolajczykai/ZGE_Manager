@@ -1,5 +1,5 @@
 import type { AppDatabase } from '../../db.js';
-import { DayCounter, type LocalDate } from '../urgency/day-counter.js';
+import type { LocalDate } from '../urgency/day-counter.js';
 import { UrgencyRules, type Urgency } from '../urgency/urgency-rules.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
 import { requirePerson, optional } from '../common/form-fields.js';
@@ -49,7 +49,6 @@ const GROSZE_PER_PLN = 100;
 /** Oferty: dodawanie, telefony z przypomnieniem po 7 dniach roboczych, przyjęcie, odrzucenie, historia. */
 export class OfferService {
   private readonly workTypes: WorkTypeRepository;
-  private readonly workingDays = new DayCounter('working');
 
   constructor(
     private readonly db: AppDatabase,
@@ -155,7 +154,7 @@ export class OfferService {
         sentOn: r.sent_on,
         lastContactOn: r.last_contact_on,
         lastPerson: r.last_person,
-        daysSinceContact: this.workingDays.daysBetween(r.last_contact_on, today),
+        daysSinceContact: this.rules.daysBetween(r.last_contact_on, today),
         urgency: this.urgencyOf(r.last_contact_on, today),
       }))
       .sort((a, b) =>

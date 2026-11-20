@@ -8,11 +8,13 @@ import {
   type SettingField,
   type SettingsHistoryEntry,
 } from '../modules/settings/settings-service.js';
+import type { DaysOff } from '../modules/settings/days-off-repository.js';
 
 /** Co pokazać w formularzu: zapisane ustawienia albo to, co ktoś właśnie wpisał (przy błędzie). */
 export interface SettingsView {
   values: Record<string, string>;
   history: SettingsHistoryEntry[];
+  daysOff: DaysOff[];
 }
 
 /** Ustawienia jako wartości pól formularza (przełącznik: '1' = włączony, brak = wyłączony). */
@@ -42,6 +44,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
       ${personButtons('/ustawienia/progi/domyslne', 'Przywróć domyślne', people, 'danger')}
     </details>
     ${fold('settings-history', `Historia zmian ustawień (${view.history.length})`, historyList(view.history))}
+    ${daysOffSection(view.daysOff, people)}
     <h3>Osoby (przyciski „kto zrobił”)</h3>
     <ul class="people-list">
       ${people.map(
@@ -58,6 +61,37 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
       <label>Imię <input name="name" required /></label><button class="primary">Dodaj osobę</button>
     </form>
   </section>`;
+}
+
+function daysOffSection(daysOff: DaysOff[], people: Person[]): SafeHtml {
+  const fields = html`<label class="setting"
+      ><span>Od</span><input type="date" name="fromOn" required /></label
+    ><label class="setting"
+      ><span>Do</span><small>puste = jeden dzień</small><input type="date" name="toOn" /></label
+    ><label class="setting"
+      ><span>Powód</span><small>opcjonalnie, np. urlop</small><input name="note" class="text"
+    /></label>`;
+  return html`<h3>Dni wolne firmy</h3>
+    <p><small>Urlop, długi weekend: te dni nie liczą się do limitów, tak jak święta.</small></p>
+    ${
+      daysOff.length === 0
+        ? html`<p><small>Brak zaplanowanych dni wolnych.</small></p>`
+        : html`<ul class="people-list">
+            ${daysOff.map(
+              (d) =>
+                html`<li>
+                  <span
+                    >${formatDate(d.fromOn)}${d.toOn === d.fromOn ? '' : html` – ${formatDate(d.toOn)}`}
+                    ${d.note ?? ''} <small>(kto wpisał: ${d.addedBy})</small></span
+                  >
+                  <form method="post" action="/ustawienia/dni-wolne/${d.id}/usun">
+                    <button class="danger small">Usuń</button>
+                  </form>
+                </li>`,
+            )}
+          </ul>`
+    }
+    ${personButtons('/ustawienia/dni-wolne', 'Dodaj dni wolne', people, 'secondary', fields)}`;
 }
 
 function settingFields(values: Record<string, string>): SafeHtml {

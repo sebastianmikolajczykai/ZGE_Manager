@@ -319,10 +319,11 @@ details.fold > summary:hover { color:var(--brand); }
 .undo { margin:12px 0; } .undo-toggle { display:inline-block; border-radius:6px; font-weight:600; list-style:none; cursor:pointer; background:#fff; color:var(--red-ink); border:2px solid var(--red-ink); font-size:17px; padding:10px 16px; user-select:none; }
 .undo-toggle:hover, .undo[open] > .undo-toggle { background:var(--red); } .undo[open] > form { margin-top:8px; }
 /* Ustawienia: etykieta z podpowiedzią po lewej, pole po prawej. */
-form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 110px; align-items:center; gap:2px 12px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; }
+form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; }
 .setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
 .setting input { grid-column:2; grid-row:1 / span 2; }
 .setting input[type=number] { font:inherit; padding:6px 8px; width:100%; border:1px solid var(--line); border-radius:6px; text-align:right; }
+.setting input[type=date], .setting input.text { font:inherit; padding:6px 8px; width:100%; border:1px solid var(--line); border-radius:6px; }
 .setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
 .error { background:var(--red); color:var(--red-ink); padding:10px 14px; border-radius:6px; }

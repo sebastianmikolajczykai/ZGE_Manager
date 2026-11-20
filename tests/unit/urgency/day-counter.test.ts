@@ -94,3 +94,19 @@ describe('DayCounter (calendar days)', () => {
     expect(calendar.daysBetween('2026-10-24', '2026-10-26')).toBe(2);
   });
 });
+
+describe('DayCounter: company days off (Ustawienia → Dni wolne firmy)', () => {
+  const dayOff = (date: string) => date === '2026-11-17';
+  const withDayOff = new DayCounter('working', undefined, dayOff);
+
+  it('does not count a company day off, like a holiday', () => {
+    // pn 16.11 → śr 18.11: wtorek wolny, zostaje tylko środa
+    expect(withDayOff.daysBetween('2026-11-16', '2026-11-18')).toBe(1);
+    expect(withDayOff.isWorkingDay('2026-11-17')).toBe(false);
+    expect(withDayOff.isWorkingDay('2026-11-18')).toBe(true);
+  });
+
+  it('calendar mode ignores days off', () => {
+    expect(new DayCounter('calendar', undefined, dayOff).daysBetween('2026-11-16', '2026-11-18')).toBe(2);
+  });
+});

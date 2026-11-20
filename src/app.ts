@@ -4,6 +4,7 @@ import { warsawDate } from './clock.js';
 import type { LocalDate } from './modules/urgency/day-counter.js';
 import { UrgencyRules } from './modules/urgency/urgency-rules.js';
 import { SettingsService } from './modules/settings/settings-service.js';
+import { DaysOffRepository } from './modules/settings/days-off-repository.js';
 import { PageRenderer } from './web/http.js';
 import { WorkTypeRepository } from './modules/work-types/work-type-repository.js';
 import { DEFAULT_WORK_TYPES } from './modules/work-types/default-work-types.js';
@@ -37,6 +38,7 @@ export function buildApp({
   people.seedIfEmpty(defaultPeople);
   const orders = new OrderService(db, today);
   const settings = new SettingsService(db, today);
+  const daysOff = new DaysOffRepository(db);
   // Funkcje zamiast wartości: zmiana w Ustawieniach działa od razu, bez restartu.
   const rules = new UrgencyRules(() => settings.urgency());
   const pages = new PageRenderer(() => settings.get().refreshSeconds);
@@ -53,6 +55,17 @@ export function buildApp({
     }
   });
 
-  registerRoutes(app, { orders, board, people, workTypes, offers, payments, today, settings, pages });
+  registerRoutes(app, {
+    orders,
+    board,
+    people,
+    workTypes,
+    offers,
+    payments,
+    today,
+    settings,
+    daysOff,
+    pages,
+  });
   return app;
 }
