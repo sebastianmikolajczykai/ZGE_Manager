@@ -8,7 +8,16 @@
 export const STEP_KINDS = ['own', 'waiting', 'daily', 'scheduled'] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
-const KINDS_WITHOUT_LIMIT: readonly StepKind[] = ['daily', 'scheduled'];
+/** Nazwy rodzajów kroków na ekranie (Łukasz edytuje kroki sam). */
+export const STEP_KIND_LABELS: Record<StepKind, string> = {
+  own: 'Robimy my',
+  waiting: 'Czekamy (urząd / klient)',
+  daily: 'Sprawdzamy codziennie',
+  scheduled: 'W ustalonym dniu (np. pomiar)',
+};
+
+/** Te rodzaje kroków nie mają limitu dni. */
+export const KINDS_WITHOUT_LIMIT: readonly StepKind[] = ['daily', 'scheduled'];
 
 export interface StepTemplate {
   name: string;
@@ -46,11 +55,15 @@ function validateStep(step: StepTemplate, position: number): void {
   if (!step.name.trim()) throw new Error(`Krok ${position} musi mieć nazwę`);
   if (!STEP_KINDS.includes(step.kind)) throw new Error(`Krok ${position}: nieznany rodzaj „${step.kind}”`);
   if (step.payment && (step.kind !== 'waiting' || step.limitDays === null)) {
-    throw new Error(`Krok zapłaty „${step.name}” musi być typu waiting i mieć limit dni`);
+    throw new Error(
+      `Krok zapłaty „${step.name}” musi być typu „${STEP_KIND_LABELS.waiting}” i mieć limit dni`,
+    );
   }
   if (step.limitDays === null) return;
   if (KINDS_WITHOUT_LIMIT.includes(step.kind)) {
-    throw new Error(`Krok ${position} („${step.name}”) nie ma limitu dni, bo jest typu ${step.kind}`);
+    throw new Error(
+      `Krok ${position} („${step.name}”) nie ma limitu dni, bo jest typu „${STEP_KIND_LABELS[step.kind]}”`,
+    );
   }
   if (!Number.isInteger(step.limitDays) || step.limitDays < 1) {
     throw new Error(

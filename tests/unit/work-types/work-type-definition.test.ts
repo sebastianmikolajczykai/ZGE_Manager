@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  STEP_KINDS,
+  STEP_KIND_LABELS,
   validateWorkType,
   type StepTemplate,
   type WorkTypeDefinition,
@@ -130,6 +132,24 @@ describe('default "Podział nieruchomości" template', () => {
       'Decyzja gminy',
       'Oddanie klientowi',
       'Zapłata',
+    ]);
+  });
+
+  it('names step kinds in Polish in error messages (Łukasz edits them himself)', () => {
+    const payment = [
+      { name: 'Zapłata', kind: 'own' as const, limitDays: 14, provisional: false, payment: true },
+    ];
+    expect(() => validateWorkType({ ...valid, steps: payment })).toThrow(/„Czekamy \(urząd \/ klient\)”/);
+    const daily = [{ name: 'Kontrola', kind: 'daily' as const, limitDays: 3, provisional: false }];
+    expect(() => validateWorkType({ ...valid, steps: daily })).toThrow(/„Sprawdzamy codziennie”/);
+  });
+
+  it('has a Polish label for every step kind', () => {
+    expect(STEP_KINDS.map((k) => STEP_KIND_LABELS[k])).toEqual([
+      'Robimy my',
+      'Czekamy (urząd / klient)',
+      'Sprawdzamy codziennie',
+      'W ustalonym dniu (np. pomiar)',
     ]);
   });
 });

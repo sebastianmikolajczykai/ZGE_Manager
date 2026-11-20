@@ -8,6 +8,7 @@ import { DaysOffRepository } from './modules/settings/days-off-repository.js';
 import { PageRenderer } from './web/http.js';
 import { WorkTypeRepository } from './modules/work-types/work-type-repository.js';
 import { DEFAULT_WORK_TYPES } from './modules/work-types/default-work-types.js';
+import { WorkTypeAdmin } from './modules/work-types/work-type-admin.js';
 import { OrderService } from './modules/orders/order-service.js';
 import { BoardService } from './modules/board/board-service.js';
 import { PeopleRepository } from './modules/people/people-repository.js';
@@ -39,6 +40,7 @@ export function buildApp({
   const orders = new OrderService(db, today);
   const settings = new SettingsService(db, today);
   const daysOff = new DaysOffRepository(db);
+  const workTypeAdmin = new WorkTypeAdmin(workTypes, db, today);
   // Funkcje zamiast wartości: zmiana w Ustawieniach działa od razu, bez restartu.
   const rules = new UrgencyRules(() => settings.urgency());
   const pages = new PageRenderer(() => settings.get().refreshSeconds);
@@ -65,6 +67,7 @@ export function buildApp({
     today,
     settings,
     daysOff,
+    workTypeAdmin,
     pages,
   });
   return app;

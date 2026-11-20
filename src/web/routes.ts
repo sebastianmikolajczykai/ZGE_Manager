@@ -24,6 +24,8 @@ import {
 } from './http.js';
 import type { SettingsService } from '../modules/settings/settings-service.js';
 import type { DaysOffRepository } from '../modules/settings/days-off-repository.js';
+import type { WorkTypeAdmin } from '../modules/work-types/work-type-admin.js';
+import { registerWorkTypeRoutes } from './work-type-routes.js';
 
 export interface WebServices {
   orders: OrderService;
@@ -35,6 +37,7 @@ export interface WebServices {
   today: () => LocalDate;
   settings: SettingsService;
   daysOff: DaysOffRepository;
+  workTypeAdmin: WorkTypeAdmin;
   pages: PageRenderer;
 }
 
@@ -56,7 +59,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     return s.pages.send(
       reply,
       'Nowe zlecenie',
-      orderForm(s.workTypes.findAll(), s.people.list(), offer ? valuesFromOffer(offer) : {}, null),
+      orderForm(s.workTypes.findActive(), s.people.list(), offer ? valuesFromOffer(offer) : {}, null),
     );
   });
 
@@ -72,7 +75,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
       return s.pages.send(
         reply,
         'Nowe zlecenie',
-        orderForm(s.workTypes.findAll(), s.people.list(), form as OrderFormValues, message(err)),
+        orderForm(s.workTypes.findActive(), s.people.list(), form as OrderFormValues, message(err)),
         HTTP_BAD_REQUEST,
       );
     }
@@ -140,6 +143,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
   });
 
+  registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error));
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
 }
@@ -155,6 +159,8 @@ function renderSettings(
     values: typed ?? settingsFormValues(s.settings.get()),
     history: s.settings.history(),
     daysOff: s.daysOff.list(s.today()),
+    workTypes: s.workTypes.findAll(),
+    workTypeHistory: s.workTypeAdmin.history(),
   };
   return s.pages.send(
     reply,
