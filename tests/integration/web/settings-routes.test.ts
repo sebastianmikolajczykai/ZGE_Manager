@@ -65,6 +65,15 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     expect(page).toContain('Zapisz: Anna');
   });
 
+  it('has − / + buttons at every number field (thresholds, reminders, refresh)', async () => {
+    const page = await settingsPage();
+    for (const label of ['Przypomnienie o ofercie po', 'Odświeżanie ekranu co (sekund)']) {
+      expect(page).toContain(`aria-label="Zmniejsz: ${label}"`);
+      expect(page).toContain(`aria-label="Zwiększ: ${label}"`);
+    }
+    expect(page).not.toContain('aria-label="Zwiększ: Miganie włączone"');
+  });
+
   it('saves a change, shows the new value and logs who changed it', async () => {
     const res = await saveThresholds({ redAfterIdleDays: '4' }, 'Piotr');
     expect(res.statusCode).toBe(303);

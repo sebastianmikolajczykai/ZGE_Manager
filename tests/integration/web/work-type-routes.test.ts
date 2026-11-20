@@ -63,6 +63,13 @@ describe('Ustawienia → Rodzaje prac (edytor)', () => {
     expect(page).toMatch(/name="payment"\s+value="13"\s+checked/);
   });
 
+  it('each step limit has − / + buttons (empty limit = no limit stays possible)', async () => {
+    const page = await get('/ustawienia/prace/1');
+    expect(page).toContain('aria-label="Zwiększ: Limit kroku 11 (dni roboczych)"');
+    expect(page).toContain('aria-label="Zmniejsz: Limit kroku 11 (dni roboczych)"');
+    expect(page).not.toMatch(/name="stepLimit_11"[^>]*required/);
+  });
+
   it('buttons like "+ Dodaj krok" change only the draft, nothing is saved yet', async () => {
     const res = await post('/ustawienia/prace/1', { ...editorFields({ stepCount: '2' }), op: 'add' });
     expect(res.statusCode).toBe(200);

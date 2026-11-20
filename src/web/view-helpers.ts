@@ -95,3 +95,16 @@ export function progressBar(position: number, total: number): SafeHtml {
     ><small>krok ${position}/${total}</small></span
   >`;
 }
+
+/**
+ * Przyciski − / + przy polu liczbowym (zmiana o 1 jednym kliknięciem). Nie wysyłają formularza:
+ * zmieniają tylko liczbę w polu (skrypt w layout, po atrybucie data-step), zapis dalej przyciskiem „Zapisz”.
+ */
+export function numberStepper(label: string, input: SafeHtml): SafeHtml {
+  return html`<span class="stepper"
+    ><button type="button" class="step-btn" data-step="-1" aria-label="Zmniejsz: ${label}">−</button
+    >${input}<button type="button" class="step-btn" data-step="1" aria-label="Zwiększ: ${label}">
+      +
+    </button></span
+  >`;
+}

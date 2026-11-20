@@ -10,6 +10,7 @@ import { boardPage, orderDetail, orderForm, parseColourFilter, type OrderFormVal
 import { settingsFormValues, settingsPage } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
+import { monitorPage } from './monitor-views.js';
 import type { PaymentService } from '../modules/payments/payment-service.js';
 import {
   HTTP_BAD_REQUEST,
@@ -154,6 +155,13 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error));
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
+
+  // Widok na monitor (styl D): osobna strona bez menu, duże kafle, samoodświeżanie.
+  app.get('/monitor', (_req, reply) =>
+    reply
+      .type('text/html; charset=utf-8')
+      .send(monitorPage(s.board.rows(), s.pages.counts(), s.pages.refreshSeconds())),
+  );
 }
 
 /** Ekran Ustawień; przy błędzie pokazuje wpisane wartości, żeby nie trzeba było ich wpisywać od nowa. */

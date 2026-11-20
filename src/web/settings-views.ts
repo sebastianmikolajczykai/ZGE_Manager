@@ -1,5 +1,5 @@
 import { html, type SafeHtml } from './html.js';
-import { fold, formatDate, personButtons } from './view-helpers.js';
+import { fold, formatDate, numberStepper, personButtons } from './view-helpers.js';
 import type { Person } from '../modules/people/people-repository.js';
 import {
   DEFAULT_APP_SETTINGS,
@@ -118,16 +118,18 @@ function settingField(field: SettingField, value: string): SafeHtml {
         ${value ? 'checked' : ''}
     /></label>`;
   }
+  const input = html`<input
+    type="number"
+    name="${field.key}"
+    min="${field.min}"
+    max="${field.max}"
+    step="1"
+    required
+    value="${value}"
+  />`;
   return html`<label class="setting"
-    ><span>${field.label}</span>${hint}<input
-      type="number"
-      name="${field.key}"
-      min="${field.min}"
-      max="${field.max}"
-      step="1"
-      required
-      value="${value}"
-  /></label>`;
+    ><span>${field.label}</span>${hint}${numberStepper(field.label, input)}</label
+  >`;
 }
 
 function defaultsSummary(): string {

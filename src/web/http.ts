@@ -16,7 +16,8 @@ export const HTTP_NOT_FOUND = 404;
  */
 export class PageRenderer {
   constructor(
-    private readonly refreshSeconds: () => number,
+    /** Co ile sekund odświeżać ekran (z Ustawień). */
+    readonly refreshSeconds: () => number,
     readonly counts: () => NavCounts,
   ) {}
 

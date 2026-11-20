@@ -5,6 +5,7 @@ import {
   fold,
   formatDate,
   formatPrice,
+  numberStepper,
   personButtons,
   personTag,
   progressBar,
@@ -88,6 +89,9 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
       ${link('/niezaplacone', '💰', 'Niezapłacone', counts.unpaidToRemind)}
       ${link('/ustawienia', '⚙', 'Ustawienia')}
     </nav>
+    <a class="monitor-link" href="/monitor" target="_blank" rel="noopener"
+      ><span class="ic" aria-hidden="true">📺</span>Widok na monitor</a
+    >
     <p class="side-foot">Lista odświeża się co ${refreshSeconds} s</p>
   </aside>`;
 }
@@ -340,9 +344,19 @@ function stepActions(order: Order, step: OrderStep, people: Person[]): SafeHtml 
 /** Zmiana limitu tylko w tym zleceniu, np. gdy urząd zapowiedział dłuższy termin. */
 function limitChangeForm(orderId: number, step: OrderStep, people: Person[]): SafeHtml {
   const field = html`<label class="setting"
-    ><span>Nowy limit</span><small>dni roboczych od rozpoczęcia kroku, tylko w tym zleceniu</small
-    ><input type="number" name="limitDays" min="1" max="365" step="1" value="${step.limitDays ?? ''}"
-  /></label>`;
+    ><span>Nowy limit</span
+    ><small>dni roboczych od rozpoczęcia kroku, tylko w tym zleceniu</small>${numberStepper(
+      'Nowy limit',
+      html`<input
+        type="number"
+        name="limitDays"
+        min="1"
+        max="365"
+        step="1"
+        value="${step.limitDays ?? ''}"
+      />`,
+    )}</label
+  >`;
   return html`<details class="limit-change">
     <summary>Zmień limit tego kroku</summary>
     ${personButtons(`/zlecenia/${orderId}/kroki/${step.position}/limit`, 'Zmień limit', people, 'secondary', field)}
@@ -450,6 +464,17 @@ if (search) search.addEventListener('input', function () {
   var none = document.getElementById('brak-wynikow');
   if (none) none.hidden = any || !document.querySelector('[data-search-list]');
 });
+// Przyciski − / + przy polach liczbowych: zmiana o 1 w granicach min–max pola (puste pole: zaczyna od min).
+document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var input = b.parentNode.querySelector('input');
+    var min = parseInt(input.getAttribute('min') || '1', 10), max = parseInt(input.getAttribute('max') || '365', 10);
+    var now = parseInt(input.value, 10);
+    var next = isNaN(now) ? min : now + parseInt(b.getAttribute('data-step'), 10);
+    input.value = String(Math.min(max, Math.max(min, next)));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+});
 setInterval(function () {
   var busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   var openForm = document.querySelector('details[open]:not(.fold)');
@@ -478,7 +503,9 @@ body { margin:0; font:17px/1.4 "Segoe UI", Inter, system-ui, sans-serif; color:v
 .side nav a.add { background:var(--add); color:var(--ink); justify-content:center; margin-bottom:12px; font-weight:700; box-shadow:0 4px 10px rgba(0,0,0,.2); }
 .side nav a.add:hover { background:#fde047; }
 .ic { width:22px; text-align:center; } .badge { margin-left:auto; background:#ef4444; color:#fff; border-radius:999px; font-size:13px; padding:1px 8px; font-weight:700; }
-.side-foot { margin-top:auto; font-size:13px; color:#86efac; padding:0 6px; }
+.side .monitor-link { margin-top:auto; display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; color:var(--side-ink); text-decoration:none; font-size:15px; border:1px solid #1f6f43; }
+.side .monitor-link:hover { background:#16512f; }
+.side-foot { margin-top:8px; font-size:13px; color:#86efac; padding:0 6px; }
 main { padding:18px 22px; min-width:0; }
 .page-head h1, .form-page h2 { margin:0 0 14px; font-size:24px; }
 /* Kafelki-liczniki */
@@ -562,6 +589,11 @@ details.fold > summary:hover { color:var(--brand); }
 form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
 .setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
 .setting input { grid-column:2; grid-row:1 / span 2; }
+.setting .stepper { grid-column:2; grid-row:1 / span 2; }
+.stepper { display:flex; align-items:stretch; gap:4px; }
+.stepper input { min-width:0; flex:1; }
+.step-btn { flex:none; width:40px; padding:0; border:1px solid #d1d5db; border-radius:10px; background:#fff; font-size:22px; font-weight:700; line-height:1; color:var(--ink); }
+.step-btn:hover { background:var(--green); border-color:var(--brand); }
 .setting input[type=number] { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; text-align:right; }
 .setting input[type=date], .setting input.text { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; }
 .setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
@@ -570,7 +602,7 @@ form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 
 .default-submit { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
 .wt-name { display:block; font-weight:600; margin:10px 0; } .wt-name input { display:block; width:100%; font:inherit; padding:8px; margin-top:4px; border:1px solid #d1d5db; border-radius:10px; }
 .steps-editor { box-shadow:none; } .steps-editor input, .steps-editor select { font:inherit; padding:6px; border:1px solid #d1d5db; border-radius:8px; width:100%; }
-.steps-editor input.limit { width:80px; text-align:right; } .steps-editor select { width:auto; } .steps-editor td { vertical-align:middle; padding:6px 8px; background:#fff !important; } .steps-editor .center { text-align:center; }
+.steps-editor input.limit { width:64px; text-align:right; border:1px solid #d1d5db; border-radius:10px; padding:6px 8px; font:inherit; } .steps-editor .step-btn { width:34px; } .steps-editor select { width:auto; } .steps-editor td { vertical-align:middle; padding:6px 8px; background:#fff !important; } .steps-editor .center { text-align:center; }
 .steps-editor input[type=radio] { width:22px; height:22px; accent-color:var(--brand); }
 .steps-editor tbody tr { cursor:default; }
 .order-buttons { white-space:nowrap; } .order-buttons button { background:#eef0f3; margin-right:2px; } .order-buttons button.danger { background:var(--red); }
@@ -611,7 +643,12 @@ div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 const TRUSTED_STYLES = new SafeHtml(STYLES);
 /** Skrypt strony; jedyna zmienna to liczba sekund (sprawdzona liczba całkowita z Ustawień). */
 function trustedScript(refreshSeconds: number): SafeHtml {
+  return new SafeHtml(`var REFRESH_MS = ${refreshMs(refreshSeconds)};${PAGE_SCRIPT}`);
+}
+
+/** Sekundy z Ustawień → milisekundy dla skryptu; tylko dodatnia liczba całkowita trafia do strony. */
+export function refreshMs(refreshSeconds: number): number {
   if (!Number.isInteger(refreshSeconds) || refreshSeconds <= 0)
     throw new Error('Nieprawidłowy czas odświeżania');
-  return new SafeHtml(`var REFRESH_MS = ${refreshSeconds * MS_PER_SECOND};${PAGE_SCRIPT}`);
+  return refreshSeconds * MS_PER_SECOND;
 }
