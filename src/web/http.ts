@@ -10,8 +10,16 @@ export const HTTP_BAD_REQUEST = 400;
 export const HTTP_FORBIDDEN = 403;
 export const HTTP_NOT_FOUND = 404;
 
-export function sendPage(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
-  return reply.code(status).type('text/html; charset=utf-8').send(layout(title, body));
+/** Wysyła stronę w układzie aplikacji; co ile sekund odświeżać ekran, bierze z Ustawień. */
+export class PageRenderer {
+  constructor(private readonly refreshSeconds: () => number) {}
+
+  send(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
+    return reply
+      .code(status)
+      .type('text/html; charset=utf-8')
+      .send(layout(title, body, this.refreshSeconds()));
+  }
 }
 
 export function message(err: unknown): string {

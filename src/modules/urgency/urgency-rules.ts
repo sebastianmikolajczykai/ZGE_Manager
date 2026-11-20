@@ -8,6 +8,9 @@ export type StepKind = 'own' | 'waiting';
 export interface UrgencySettings {
   yellowAfterIdleDays: number;
   redAfterIdleDays: number;
+  /** Żółte tyle dni przed limitem kroku (1 = dzień przed limitem; 0 = bez ostrzeżenia). */
+  warnDaysBeforeLimit: number;
+  blinkEnabled: boolean;
   /** Miganie, gdy sprawa jest czerwona dłużej niż tyle dni. */
   blinkAfterRedDays: number;
   dayMode: DayMode;
@@ -16,6 +19,8 @@ export interface UrgencySettings {
 export const DEFAULT_URGENCY_SETTINGS: UrgencySettings = {
   yellowAfterIdleDays: 2,
   redAfterIdleDays: 3,
+  warnDaysBeforeLimit: 1,
+  blinkEnabled: true,
   blinkAfterRedDays: 7,
   dayMode: 'working',
 };
@@ -46,11 +51,27 @@ const COLOUR_RANK: Record<Colour, number> = { red: 2, yellow: 1, green: 0 };
 
 /** Reguły kolorów i kolejności spraw na tablicy. */
 export class UrgencyRules {
-  private readonly counter: DayCounter;
+  private readonly source: () => UrgencySettings;
+  private readonly counters = new Map<DayMode, DayCounter>();
 
-  constructor(private readonly settings: UrgencySettings) {
-    validateSettings(settings);
-    this.counter = new DayCounter(settings.dayMode);
+  /** `settings` może być funkcją: wtedy przy każdym sprawdzeniu bierzemy aktualne ustawienia (zmiana w Ustawieniach działa od razu). */
+  constructor(settings: UrgencySettings | (() => UrgencySettings)) {
+    this.source = typeof settings === 'function' ? settings : () => settings;
+    validateSettings(this.source());
+  }
+
+  private get settings(): UrgencySettings {
+    return this.source();
+  }
+
+  private get counter(): DayCounter {
+    const mode = this.settings.dayMode;
+    let counter = this.counters.get(mode);
+    if (!counter) {
+      counter = new DayCounter(mode);
+      this.counters.set(mode, counter);
+    }
+    return counter;
   }
 
   evaluate(step: StepState, today: LocalDate): Urgency {
@@ -64,9 +85,10 @@ export class UrgencyRules {
     const limitOverdue = daysToLimit === null ? 0 : 1 - daysToLimit;
     const daysOverdue = Math.max(0, idleOverdue, limitOverdue);
 
-    const dayBeforeLimit = daysToLimit === 1;
+    const nearLimit =
+      daysToLimit !== null && daysToLimit >= 1 && daysToLimit <= this.settings.warnDaysBeforeLimit;
     const idleWarning = idleRules && idle >= this.settings.yellowAfterIdleDays;
-    return this.fromOverdue(daysOverdue, dayBeforeLimit || idleWarning);
+    return this.fromOverdue(daysOverdue, nearLimit || idleWarning);
   }
 
   /**
@@ -87,7 +109,8 @@ export class UrgencyRules {
 
   private fromOverdue(daysOverdue: number, warning: boolean): Urgency {
     if (daysOverdue > 0) {
-      return { colour: 'red', daysOverdue, blink: daysOverdue > this.settings.blinkAfterRedDays };
+      const { blinkEnabled, blinkAfterRedDays } = this.settings;
+      return { colour: 'red', daysOverdue, blink: blinkEnabled && daysOverdue > blinkAfterRedDays };
     }
     return { colour: warning ? 'yellow' : 'green', daysOverdue: 0, blink: false };
   }
@@ -111,7 +134,7 @@ export class UrgencyRules {
 }
 
 function validateSettings(s: UrgencySettings): void {
-  const values = [s.yellowAfterIdleDays, s.redAfterIdleDays, s.blinkAfterRedDays];
+  const values = [s.yellowAfterIdleDays, s.redAfterIdleDays, s.warnDaysBeforeLimit, s.blinkAfterRedDays];
   if (values.some((v) => !Number.isInteger(v) || v < 0)) {
     throw new Error('Progi dni muszą być nieujemnymi liczbami całkowitymi');
   }

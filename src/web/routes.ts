@@ -6,7 +6,8 @@ import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import type { OfferService } from '../modules/offers/offer-service.js';
-import { boardPage, orderDetail, orderForm, settingsPage, type OrderFormValues } from './views.js';
+import { boardPage, orderDetail, orderForm, type OrderFormValues } from './views.js';
+import { settingsFormValues, settingsPage } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
 import type { PaymentService } from '../modules/payments/payment-service.js';
@@ -18,9 +19,10 @@ import {
   message,
   optionalField,
   priceField,
-  sendPage,
   type Form,
+  type PageRenderer,
 } from './http.js';
+import type { SettingsService } from '../modules/settings/settings-service.js';
 
 export interface WebServices {
   orders: OrderService;
@@ -30,6 +32,8 @@ export interface WebServices {
   offers: OfferService;
   payments: PaymentService;
   today: () => LocalDate;
+  settings: SettingsService;
+  pages: PageRenderer;
 }
 
 /** Ekrany aplikacji: tablica z kartą zlecenia, formularz nowego zlecenia, ustawienia. */
@@ -47,7 +51,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   app.get('/zlecenia/nowe', (req, reply) => {
     const offerId = Number((req.query as Form).oferta);
     const offer = Number.isInteger(offerId) && offerId > 0 ? s.offers.get(offerId) : null;
-    return sendPage(
+    return s.pages.send(
       reply,
       'Nowe zlecenie',
       orderForm(s.workTypes.findAll(), s.people.list(), offer ? valuesFromOffer(offer) : {}, null),
@@ -63,7 +67,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
       if (offerId !== null) s.offers.markAccepted(Number(offerId), form.person ?? '', id);
       return reply.redirect(`/?zlecenie=${id}`, HTTP_SEE_OTHER);
     } catch (err) {
-      return sendPage(
+      return s.pages.send(
         reply,
         'Nowe zlecenie',
         orderForm(s.workTypes.findAll(), s.people.list(), form as OrderFormValues, message(err)),
@@ -87,13 +91,13 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   orderAction('/zlecenia/:id/kroki/:position/sprawdzone', (o, p, who) => s.orders.checkToday(o, p, who));
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
 
-  app.get('/ustawienia', (_req, reply) => sendPage(reply, 'Ustawienia', settingsPage(s.people.list(), null)));
+  app.get('/ustawienia', (_req, reply) => renderSettings(reply, s, null));
   app.post('/ustawienia/osoby', (req, reply) => {
     try {
       s.people.add((req.body as Form).name ?? '');
       return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
     } catch (err) {
-      return sendPage(reply, 'Ustawienia', settingsPage(s.people.list(), message(err)), HTTP_BAD_REQUEST);
+      return renderSettings(reply, s, message(err));
     }
   });
   app.post('/ustawienia/osoby/:id/usun', (req, reply) => {
@@ -101,8 +105,42 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
   });
 
+  app.post('/ustawienia/progi', (req, reply) => {
+    const form = req.body as Form;
+    try {
+      s.settings.update(form, form.person ?? '');
+      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+    } catch (err) {
+      return renderSettings(reply, s, message(err), form);
+    }
+  });
+  app.post('/ustawienia/progi/domyslne', (req, reply) => {
+    try {
+      s.settings.resetToDefaults((req.body as Form).person ?? '');
+      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+    } catch (err) {
+      return renderSettings(reply, s, message(err));
+    }
+  });
+
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
+}
+
+/** Ekran Ustawień; przy błędzie pokazuje wpisane wartości, żeby nie trzeba było ich wpisywać od nowa. */
+function renderSettings(
+  reply: FastifyReply,
+  s: WebServices,
+  error: string | null,
+  typed: Form | null = null,
+) {
+  const view = { values: typed ?? settingsFormValues(s.settings.get()), history: s.settings.history() };
+  return s.pages.send(
+    reply,
+    'Ustawienia',
+    settingsPage(s.people.list(), view, error),
+    error ? HTTP_BAD_REQUEST : 200,
+  );
 }
 
 /** Formularz zlecenia wypełniony danymi z przyjętej oferty. */
@@ -131,7 +169,7 @@ function renderBoard(
   if (orderId !== null) {
     const order = s.orders.get(orderId);
     if (!order)
-      return sendPage(
+      return s.pages.send(
         reply,
         'Nie znaleziono',
         boardPage(s.board.rows(), null, `Nie ma zlecenia o numerze ${orderId}`),
@@ -142,7 +180,7 @@ function renderBoard(
     const workType = s.workTypes.findById(order.workTypeId)?.name ?? '?';
     detail = orderDetail(order, workType, urgency, s.orders.history(orderId), s.people.list());
   }
-  return sendPage(reply, 'ZGE Menedżer', boardPage(s.board.rows(), detail, error, orderId), status);
+  return s.pages.send(reply, 'ZGE Menedżer', boardPage(s.board.rows(), detail, error, orderId), status);
 }
 
 /** Ochrona przed formularzem wysłanym z obcej strony (CSRF): POST tylko z tej samej aplikacji. */

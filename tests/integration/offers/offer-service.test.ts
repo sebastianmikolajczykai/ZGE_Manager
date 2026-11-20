@@ -142,4 +142,17 @@ describe('OfferService', () => {
     expect(() => offers.reject(404, PERSON, null)).toThrow(/Nie ma oferty o numerze 404/);
     expect(offers.get(404)).toBeNull();
   });
+
+  it('uses the reminder period set in Ustawienia (e.g. 10 working days instead of 7)', () => {
+    const tenDays = new OfferService(
+      db,
+      () => today,
+      new UrgencyRules(DEFAULT_URGENCY_SETTINGS),
+      () => 10,
+    );
+    // 20.11 (pt) + 7 dni roboczych = 01.12; przy 10 dniach to jeszcze zielone.
+    expect(tenDays.urgencyOf('2026-11-20', '2026-12-01').colour).toBe('green');
+    expect(offers.urgencyOf('2026-11-20', '2026-12-01').colour).toBe('red');
+    expect(tenDays.urgencyOf('2026-11-20', '2026-12-04').colour).toBe('red');
+  });
 });

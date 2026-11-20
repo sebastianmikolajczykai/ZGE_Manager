@@ -2,7 +2,9 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AppDatabase } from './db.js';
 import { warsawDate } from './clock.js';
 import type { LocalDate } from './modules/urgency/day-counter.js';
-import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from './modules/urgency/urgency-rules.js';
+import { UrgencyRules } from './modules/urgency/urgency-rules.js';
+import { SettingsService } from './modules/settings/settings-service.js';
+import { PageRenderer } from './web/http.js';
 import { WorkTypeRepository } from './modules/work-types/work-type-repository.js';
 import { DEFAULT_WORK_TYPES } from './modules/work-types/default-work-types.js';
 import { OrderService } from './modules/orders/order-service.js';
@@ -34,9 +36,12 @@ export function buildApp({
   workTypes.seedDefaults(DEFAULT_WORK_TYPES);
   people.seedIfEmpty(defaultPeople);
   const orders = new OrderService(db, today);
-  const rules = new UrgencyRules(DEFAULT_URGENCY_SETTINGS);
+  const settings = new SettingsService(db, today);
+  // Funkcje zamiast wartości: zmiana w Ustawieniach działa od razu, bez restartu.
+  const rules = new UrgencyRules(() => settings.urgency());
+  const pages = new PageRenderer(() => settings.get().refreshSeconds);
   const board = new BoardService(db, orders, rules, today);
-  const offers = new OfferService(db, today, rules);
+  const offers = new OfferService(db, today, rules, () => settings.get().offerFollowUpDays);
   const payments = new PaymentService(db, orders, rules, today);
 
   app.get('/health', async (_req, reply) => {
@@ -48,6 +53,6 @@ export function buildApp({
     }
   });
 
-  registerRoutes(app, { orders, board, people, workTypes, offers, payments, today });
+  registerRoutes(app, { orders, board, people, workTypes, offers, payments, today, settings, pages });
   return app;
 }
