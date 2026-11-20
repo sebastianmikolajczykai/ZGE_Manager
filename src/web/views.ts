@@ -1,4 +1,4 @@
-import { html, type SafeHtml } from './html.js';
+import { html, SafeHtml } from './html.js';
 import type { BoardRow } from '../modules/board/board-service.js';
 import type { HistoryEntry, Order, OrderStep } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
@@ -16,7 +16,7 @@ export function layout(title: string, body: SafeHtml): string {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>${title}</title>
         <style>
-          ${STYLES}
+          ${TRUSTED_STYLES}
         </style>
       </head>
       <body>
@@ -33,7 +33,7 @@ export function layout(title: string, body: SafeHtml): string {
         </header>
         <main>${body}</main>
         <script>
-          ${REFRESH_SCRIPT};
+          ${TRUSTED_SCRIPT};
         </script>
       </body>
     </html>`.value;
@@ -334,3 +334,7 @@ button.big { font-size:20px; padding:12px 20px; }
 .order-form input, .order-form select, .order-form textarea, form.inline input { display:block; width:100%; font:inherit; padding:8px; margin-top:4px; border:1px solid var(--line); border-radius:6px; }
 .people-list li { display:flex; gap:12px; align-items:center; margin:6px 0; } .people-list form { margin:0; }
 `;
+
+// Stałe napisane w kodzie (bez danych od użytkownika), więc wstawiamy je bez zamiany znaków.
+const TRUSTED_STYLES = new SafeHtml(STYLES);
+const TRUSTED_SCRIPT = new SafeHtml(REFRESH_SCRIPT);
