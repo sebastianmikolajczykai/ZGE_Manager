@@ -1,6 +1,6 @@
 import { html, type SafeHtml } from './html.js';
 import { formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
-import { historyText } from './views.js';
+import { historySection } from './views.js';
 import type { UnpaidRow } from '../modules/payments/payment-service.js';
 import type { HistoryEntry } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
@@ -92,9 +92,6 @@ export function unpaidDetail(
     <h3>Klient zapłacił</h3>
     ${personButtons(`/niezaplacone/${row.orderId}/zaplacone`, 'Zapłacone', people, 'primary')}
     <p><a href="/?zlecenie=${row.orderId}">Pełna karta zlecenia →</a></p>
-    <h3>Historia</h3>
-    <ul class="history">
-      ${[...history].reverse().map((h) => html`<li><time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`)}
-    </ul>
+    ${historySection(history)}
   </section>`;
 }

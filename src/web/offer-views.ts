@@ -1,5 +1,5 @@
 import { html, type SafeHtml } from './html.js';
-import { formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
+import { fold, formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
 import type { Offer, OfferHistoryEntry, OfferRow, OfferStatus } from '../modules/offers/offer-service.js';
 import type { Person } from '../modules/people/people-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
@@ -112,10 +112,13 @@ export function offerDetail(
       }
     </dl>
     ${open ? offerActions(offer, people) : ''}
-    <h3>Historia</h3>
-    <ul class="history">
-      ${[...history].reverse().map((h) => html`<li><time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`)}
-    </ul>
+    ${fold(
+      'history',
+      `Historia (${history.length})`,
+      html`<ul class="history">
+        ${[...history].reverse().map((h) => html`<li><time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`)}
+      </ul>`,
+    )}
   </section>`;
 }
 

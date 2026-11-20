@@ -21,6 +21,7 @@ test('oferta: dodanie, telefon z notatką, przyjęcie i zlecenie z wypełnionymi
 
   await panel.getByLabel('Notatka z rozmowy').fill('myśli, oddzwoni w pon.');
   await panel.getByRole('button', { name: 'Rozmowa: Bartek' }).click();
+  await panel.getByText(/^Historia \(\d+\)$/).click();
   await expect(panel.getByText('Bartek: telefon (myśli, oddzwoni w pon.)')).toBeVisible();
 
   await panel.getByRole('link', { name: 'Przyjęta → zrób zlecenie' }).click();

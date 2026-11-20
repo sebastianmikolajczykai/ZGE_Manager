@@ -18,7 +18,10 @@ test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie,
   await expect(panel.getByText('Ustalenie terminu pomiaru w terenie')).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toBeVisible();
 
+  // Historia jest zwinięta; po rozwinięciu przeglądarka pamięta to także po przeładowaniu strony.
+  await panel.getByText(/^Historia \(\d+\)$/).click();
   await panel.getByRole('button', { name: 'Zrobione: Bartek' }).click();
+  await expect(panel.getByText('Zrobione kroki (1)')).toBeVisible();
   await expect(panel.getByText('Bartek: zrobione „Ustalenie terminu pomiaru w terenie”')).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
     'Analiza materiałów w urzędzie',
