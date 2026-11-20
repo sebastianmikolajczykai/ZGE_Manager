@@ -55,6 +55,8 @@ export class OfferService {
     private readonly db: AppDatabase,
     private readonly today: () => LocalDate,
     private readonly rules: UrgencyRules,
+    /** Po ilu dniach roboczych przypomnieć o ofercie (z Ustawień). */
+    private readonly followUpDays: () => number = () => OFFER_FOLLOW_UP_DAYS,
   ) {
     this.workTypes = new WorkTypeRepository(db);
   }
@@ -164,12 +166,17 @@ export class OfferService {
       );
   }
 
+  /** Po ilu dniach roboczych od kontaktu przypominamy o ofercie. */
+  reminderDays(): number {
+    return this.followUpDays();
+  }
+
   urgencyOf(lastContactOn: LocalDate, today: LocalDate): Urgency {
-    // Typ „waiting”: liczy się tylko limit 7 dni (bez reguły bezczynności z kroków zleceń).
+    // Typ „waiting”: liczy się tylko limit dni z Ustawień (bez reguły bezczynności z kroków zleceń).
     return this.rules.evaluate(
       {
         kind: 'waiting',
-        limitDays: OFFER_FOLLOW_UP_DAYS,
+        limitDays: this.followUpDays(),
         startedOn: lastContactOn,
         lastActivityOn: lastContactOn,
       },

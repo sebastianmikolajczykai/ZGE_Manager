@@ -4,13 +4,21 @@ import type { OrderService } from '../modules/orders/order-service.js';
 import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import { unpaidDetail, unpaidPage } from './unpaid-views.js';
-import { HTTP_BAD_REQUEST, HTTP_NOT_FOUND, HTTP_SEE_OTHER, message, sendPage, type Form } from './http.js';
+import {
+  HTTP_BAD_REQUEST,
+  HTTP_NOT_FOUND,
+  HTTP_SEE_OTHER,
+  message,
+  type PageRenderer,
+  type Form,
+} from './http.js';
 
 export interface UnpaidWebServices {
   payments: PaymentService;
   orders: OrderService;
   people: PeopleRepository;
   today: () => LocalDate;
+  pages: PageRenderer;
 }
 
 const TITLE = 'Niezapłacone';
@@ -65,9 +73,9 @@ function renderUnpaid(
       const msg = known
         ? `Zlecenie nr ${orderId} nie czeka na zapłatę`
         : `Nie ma zlecenia o numerze ${orderId}`;
-      return sendPage(reply, 'Nie znaleziono', unpaidPage(rows, null, msg), HTTP_NOT_FOUND);
+      return s.pages.send(reply, 'Nie znaleziono', unpaidPage(rows, null, msg), HTTP_NOT_FOUND);
     }
     detail = unpaidDetail(row, row.urgency, s.orders.history(orderId), s.people.list());
   }
-  return sendPage(reply, TITLE, unpaidPage(rows, detail, error, orderId), status);
+  return s.pages.send(reply, TITLE, unpaidPage(rows, detail, error, orderId), status);
 }

@@ -12,8 +12,8 @@ import {
   message,
   optionalField,
   priceField,
-  sendPage,
   type Form,
+  type PageRenderer,
 } from './http.js';
 
 export interface OfferWebServices {
@@ -21,6 +21,7 @@ export interface OfferWebServices {
   people: PeopleRepository;
   workTypes: WorkTypeRepository;
   today: () => LocalDate;
+  pages: PageRenderer;
 }
 
 const TITLE = 'Oferty';
@@ -33,7 +34,7 @@ export function registerOfferRoutes(app: FastifyInstance, s: OfferWebServices): 
   });
 
   app.get('/oferty/nowa', (_req, reply) =>
-    sendPage(
+    s.pages.send(
       reply,
       'Nowa oferta',
       offerForm(s.workTypes.findAll(), s.people.list(), { sentOn: s.today() }, null),
@@ -46,7 +47,7 @@ export function registerOfferRoutes(app: FastifyInstance, s: OfferWebServices): 
       const id = s.offers.create(toOfferInput(form), form.person ?? '');
       return reply.redirect(`/oferty?oferta=${id}`, HTTP_SEE_OTHER);
     } catch (err) {
-      return sendPage(
+      return s.pages.send(
         reply,
         'Nowa oferta',
         offerForm(s.workTypes.findAll(), s.people.list(), form, message(err)),
@@ -83,7 +84,7 @@ function renderOffers(
   if (offerId !== null) {
     const offer = s.offers.get(offerId);
     if (!offer) {
-      return sendPage(
+      return s.pages.send(
         reply,
         'Nie znaleziono',
         offersPage(s.offers.rows(), null, `Nie ma oferty o numerze ${offerId}`),
@@ -92,9 +93,16 @@ function renderOffers(
     }
     const workType = s.workTypes.findById(offer.workTypeId)?.name ?? '?';
     const urgency = s.offers.urgencyOf(offer.lastContactOn, s.today());
-    detail = offerDetail(offer, workType, urgency, s.offers.history(offerId), s.people.list());
+    detail = offerDetail(
+      offer,
+      workType,
+      urgency,
+      s.offers.history(offerId),
+      s.people.list(),
+      s.offers.reminderDays(),
+    );
   }
-  return sendPage(reply, TITLE, offersPage(s.offers.rows(), detail, error, offerId), status);
+  return s.pages.send(reply, TITLE, offersPage(s.offers.rows(), detail, error, offerId), status);
 }
 
 function toOfferInput(f: Form): OfferInput {

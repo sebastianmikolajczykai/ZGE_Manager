@@ -74,6 +74,7 @@ export function offerDetail(
   urgency: Urgency,
   history: OfferHistoryEntry[],
   people: Person[],
+  reminderDays: number,
 ): SafeHtml {
   const open = offer.status === 'open';
   return html`<section class="detail" aria-label="Szczegóły oferty">
@@ -111,7 +112,7 @@ export function offerDetail(
           : ''
       }
     </dl>
-    ${open ? offerActions(offer, people) : ''}
+    ${open ? offerActions(offer, people, reminderDays) : ''}
     ${fold(
       'history',
       `Historia (${history.length})`,
@@ -122,12 +123,13 @@ export function offerDetail(
   </section>`;
 }
 
-function offerActions(offer: Offer, people: Person[]): SafeHtml {
+function offerActions(offer: Offer, people: Person[], reminderDays: number): SafeHtml {
   const callFields = html`<label
       >Notatka z rozmowy <small>(opcjonalnie)</small><textarea name="note"></textarea>
     </label>
     <label class="choice"
-      ><input type="radio" name="next" value="again" checked /> Przypomnij znów za 7 dni roboczych</label
+      ><input type="radio" name="next" value="again" checked /> Przypomnij znów za ${reminderDays} dni
+      roboczych</label
     >
     <label class="choice"><input type="radio" name="next" value="end" /> Kontakt zakończony</label>`;
   return html`<h3>Telefon do klienta</h3>

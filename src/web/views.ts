@@ -6,10 +6,12 @@ import type { Person } from '../modules/people/people-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { Urgency } from '../modules/urgency/urgency-rules.js';
 
-const REFRESH_SECONDS = 60;
+/** Domyślnie co ile sekund odświeżać listy (zmienia się w Ustawieniach). */
+const DEFAULT_REFRESH_SECONDS = 60;
+const MS_PER_SECOND = 1000;
 const COLOUR_LABEL = { green: 'w terminie', yellow: 'ostatni dzień', red: 'po terminie' } as const;
 
-export function layout(title: string, body: SafeHtml): string {
+export function layout(title: string, body: SafeHtml, refreshSeconds = DEFAULT_REFRESH_SECONDS): string {
   return html`<!doctype html>
     <html lang="pl">
       <head>
@@ -34,7 +36,7 @@ export function layout(title: string, body: SafeHtml): string {
         </header>
         <main>${body}</main>
         <script>
-          ${TRUSTED_SCRIPT};
+          ${trustedScript(refreshSeconds)};
         </script>
       </body>
     </html>`.value;
@@ -256,35 +258,7 @@ export function orderForm(
   </section>`;
 }
 
-export function settingsPage(people: Person[], error: string | null): SafeHtml {
-  return html`<section class="form-page">
-    <h2>Ustawienia</h2>
-    ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
-    <h3>Osoby (przyciski „kto zrobił”)</h3>
-    <ul class="people-list">
-      ${people.map(
-        (p) =>
-          html`<li>
-            ${p.name}
-            <form method="post" action="/ustawienia/osoby/${p.id}/usun">
-              <button class="danger small">Usuń</button>
-            </form>
-          </li>`,
-      )}
-    </ul>
-    <form method="post" action="/ustawienia/osoby" class="inline">
-      <label>Imię <input name="name" required /></label><button class="primary">Dodaj osobę</button>
-    </form>
-    <p>
-      <small
-        >Progi kolorów: żółte dzień przed limitem, czerwone w dniu limitu; bez ruchu: żółte w 2., czerwone w
-        3. dniu roboczym; miganie po 7 dniach na czerwono. Liczymy dni robocze bez świąt.</small
-      >
-    </p>
-  </section>`;
-}
-
-const REFRESH_SCRIPT = `
+const PAGE_SCRIPT = `
 // Zwijane sekcje (data-fold) pamiętają w przeglądarce, czy są rozwinięte, także po odświeżeniu.
 document.querySelectorAll('details[data-fold]').forEach(function (d) {
   var key = 'fold:' + d.getAttribute('data-fold');
@@ -297,7 +271,7 @@ setInterval(function () {
   var busy = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   var openForm = document.querySelector('details[open]:not(.fold)');
   if (!busy && !openForm && ['/', '/oferty', '/niezaplacone'].indexOf(location.pathname) >= 0) location.reload();
-}, ${REFRESH_SECONDS * 1000});`;
+}, REFRESH_MS);`;
 
 const STYLES = `
 :root { --ink:#1d2733; --muted:#5b6876; --line:#d7dde4; --bg:#f4f6f8; --brand:#189400; --brand-light:#24b109; --header:#000;
@@ -344,6 +318,12 @@ details.fold > summary:hover { color:var(--brand); }
 /* Przycisk „Cofnij ostatnie odhaczenie”: wyraźny, ale spokojny (czerwony obrys). */
 .undo { margin:12px 0; } .undo-toggle { display:inline-block; border-radius:6px; font-weight:600; list-style:none; cursor:pointer; background:#fff; color:var(--red-ink); border:2px solid var(--red-ink); font-size:17px; padding:10px 16px; user-select:none; }
 .undo-toggle:hover, .undo[open] > .undo-toggle { background:var(--red); } .undo[open] > form { margin-top:8px; }
+/* Ustawienia: etykieta z podpowiedzią po lewej, pole po prawej. */
+form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 110px; align-items:center; gap:2px 12px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; }
+.setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
+.setting input { grid-column:2; grid-row:1 / span 2; }
+.setting input[type=number] { font:inherit; padding:6px 8px; width:100%; border:1px solid var(--line); border-radius:6px; text-align:right; }
+.setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
 .error { background:var(--red); color:var(--red-ink); padding:10px 14px; border-radius:6px; }
 .empty { background:#fff; padding:20px; }
@@ -358,4 +338,9 @@ details.fold > summary:hover { color:var(--brand); }
 
 // Stałe napisane w kodzie (bez danych od użytkownika), więc wstawiamy je bez zamiany znaków.
 const TRUSTED_STYLES = new SafeHtml(STYLES);
-const TRUSTED_SCRIPT = new SafeHtml(REFRESH_SCRIPT);
+/** Skrypt strony; jedyna zmienna to liczba sekund (sprawdzona liczba całkowita z Ustawień). */
+function trustedScript(refreshSeconds: number): SafeHtml {
+  if (!Number.isInteger(refreshSeconds) || refreshSeconds <= 0)
+    throw new Error('Nieprawidłowy czas odświeżania');
+  return new SafeHtml(`var REFRESH_MS = ${refreshSeconds * MS_PER_SECOND};${PAGE_SCRIPT}`);
+}

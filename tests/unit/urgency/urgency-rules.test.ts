@@ -190,3 +190,49 @@ describe('UrgencyRules.evaluateScheduled: step on a fixed date (field measuremen
     });
   });
 });
+
+describe('UrgencyRules: settings changed in Ustawienia', () => {
+  const step = (limitDays: number, today: string) =>
+    ownStep({ limitDays, startedOn: '2026-11-01', lastActivityOn: today });
+
+  it('warns N days before the limit when the owner sets N = 2', () => {
+    const warnTwo = new UrgencyRules({
+      ...DEFAULT_URGENCY_SETTINGS,
+      dayMode: 'calendar',
+      warnDaysBeforeLimit: 2,
+    });
+    expect(warnTwo.evaluate(step(5, '2026-11-03'), '2026-11-03').colour).toBe('green');
+    expect(warnTwo.evaluate(step(5, '2026-11-04'), '2026-11-04').colour).toBe('yellow');
+    expect(warnTwo.evaluate(step(5, '2026-11-05'), '2026-11-05').colour).toBe('yellow');
+    expect(warnTwo.evaluate(step(5, '2026-11-06'), '2026-11-06').colour).toBe('red');
+  });
+
+  it('gives no warning before the limit when set to 0', () => {
+    const noWarn = new UrgencyRules({
+      ...DEFAULT_URGENCY_SETTINGS,
+      dayMode: 'calendar',
+      warnDaysBeforeLimit: 0,
+    });
+    expect(noWarn.evaluate(step(5, '2026-11-05'), '2026-11-05').colour).toBe('green');
+    expect(noWarn.evaluate(step(5, '2026-11-06'), '2026-11-06').colour).toBe('red');
+  });
+
+  it('never blinks when blinking is switched off', () => {
+    const calm = new UrgencyRules({ ...DEFAULT_URGENCY_SETTINGS, dayMode: 'calendar', blinkEnabled: false });
+    const longOverdue = calm.evaluate(step(1, '2026-11-30'), '2026-11-30');
+    expect(longOverdue.colour).toBe('red');
+    expect(longOverdue.blink).toBe(false);
+  });
+
+  it('reads the current settings on every check, so a change works without restarting', () => {
+    let settings = { ...DEFAULT_URGENCY_SETTINGS, dayMode: 'calendar' as const };
+    const live = new UrgencyRules(() => settings);
+    expect(live.evaluate(ownStep(), '2026-11-03').colour).toBe('yellow');
+    settings = { ...settings, yellowAfterIdleDays: 4, redAfterIdleDays: 5 };
+    expect(live.evaluate(ownStep(), '2026-11-03').colour).toBe('green');
+  });
+
+  it('rejects a warning period that is negative', () => {
+    expect(() => new UrgencyRules({ ...DEFAULT_URGENCY_SETTINGS, warnDaysBeforeLimit: -1 })).toThrow();
+  });
+});
