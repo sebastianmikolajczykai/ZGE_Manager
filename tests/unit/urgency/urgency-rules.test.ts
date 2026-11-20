@@ -236,3 +236,19 @@ describe('UrgencyRules: settings changed in Ustawienia', () => {
     expect(() => new UrgencyRules({ ...DEFAULT_URGENCY_SETTINGS, warnDaysBeforeLimit: -1 })).toThrow();
   });
 });
+
+describe('UrgencyRules: company days off', () => {
+  const working = { ...DEFAULT_URGENCY_SETTINGS };
+  const withDayOff = { ...working, isDayOff: (date: string) => date === '2026-11-17' };
+  // Krok z limitem 2 dni zaczęty w pn 16.11; w śr 18.11 bez dnia wolnego = czerwone, z wolnym wtorkiem = żółte.
+  const step = ownStep({ limitDays: 2, startedOn: '2026-11-16', lastActivityOn: '2026-11-16' });
+
+  it('a company day off pushes the limit by a day', () => {
+    expect(new UrgencyRules(working).evaluate(step, '2026-11-18').colour).toBe('red');
+    expect(new UrgencyRules(withDayOff).evaluate(step, '2026-11-18').colour).toBe('yellow');
+  });
+
+  it('counts working days for the lists the same way as the colours', () => {
+    expect(new UrgencyRules(withDayOff).daysBetween('2026-11-16', '2026-11-18')).toBe(1);
+  });
+});

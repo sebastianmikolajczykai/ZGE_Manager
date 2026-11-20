@@ -2,6 +2,7 @@ import type { AppDatabase } from '../../db.js';
 import type { LocalDate } from '../urgency/day-counter.js';
 import type { UrgencySettings } from '../urgency/urgency-rules.js';
 import { requirePerson } from '../common/form-fields.js';
+import { DaysOffRepository } from './days-off-repository.js';
 
 /** Ustawienia, które Łukasz zmienia sam na ekranie Ustawienia. */
 export interface AppSettings {
@@ -101,10 +102,14 @@ const SWITCH_OFF = 0;
 
 /** Odczyt i zapis ustawień w bazie, z historią zmian „kto, co, kiedy”. */
 export class SettingsService {
+  private readonly daysOff: DaysOffRepository;
+
   constructor(
     private readonly db: AppDatabase,
     private readonly today: () => LocalDate,
-  ) {}
+  ) {
+    this.daysOff = new DaysOffRepository(db);
+  }
 
   get(): AppSettings {
     const rows = this.db.connection.prepare('SELECT key, value FROM app_settings').all() as {
@@ -147,7 +152,7 @@ export class SettingsService {
     });
   }
 
-  /** Część ustawień potrzebna do liczenia kolorów. */
+  /** Część ustawień potrzebna do liczenia kolorów (z dniami wolnymi firmy). */
   urgency(): UrgencySettings {
     const s = this.get();
     return {
@@ -157,6 +162,7 @@ export class SettingsService {
       blinkEnabled: s.blinkEnabled,
       blinkAfterRedDays: s.blinkAfterRedDays,
       dayMode: 'working',
+      isDayOff: this.daysOff.checker(),
     };
   }
 

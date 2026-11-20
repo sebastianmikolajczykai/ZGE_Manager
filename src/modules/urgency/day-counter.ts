@@ -16,6 +16,8 @@ export class DayCounter {
   constructor(
     private readonly mode: DayMode,
     private readonly holidays: PolishHolidays = new PolishHolidays(),
+    /** Dni wolne firmy (z Ustawień); w trybie kalendarzowym ignorowane. */
+    private readonly isDayOff: (date: LocalDate) => boolean = () => false,
   ) {}
 
   /** Czy w danym dniu się pracuje (w trybie kalendarzowym: zawsze tak). */
@@ -35,7 +37,9 @@ export class DayCounter {
   }
 
   private isWorkingEpochDay(epochDay: number): boolean {
-    return isWeekday(epochDay) && !this.holidays.isHoliday(toIsoDate(epochDay));
+    if (!isWeekday(epochDay)) return false;
+    const date = toIsoDate(epochDay);
+    return !this.holidays.isHoliday(date) && !this.isDayOff(date);
   }
 }
 

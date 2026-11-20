@@ -1,5 +1,5 @@
 import type { AppDatabase } from '../../db.js';
-import { DayCounter, type LocalDate } from '../urgency/day-counter.js';
+import type { LocalDate } from '../urgency/day-counter.js';
 import { UrgencyRules, type Urgency } from '../urgency/urgency-rules.js';
 import type { Order, OrderService, OrderStep } from '../orders/order-service.js';
 
@@ -24,8 +24,6 @@ export interface UnpaidRow {
  * rozmowy z przypomnieniem i „Zapłacone”. Zapis w zleceniach robi OrderService.
  */
 export class PaymentService {
-  private readonly workingDays = new DayCounter('working');
-
   constructor(
     private readonly db: AppDatabase,
     private readonly orders: OrderService,
@@ -80,7 +78,7 @@ export class PaymentService {
       pricePln: order.pricePln,
       handedOverOn: step.startedOn ?? today,
       lastContactOn,
-      daysSinceContact: this.workingDays.daysBetween(lastContactOn, today),
+      daysSinceContact: this.rules.daysBetween(lastContactOn, today),
       lastPerson: this.lastPerson(order.id),
       urgency: this.urgencyOf(step, today),
     };

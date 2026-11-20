@@ -117,4 +117,48 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('Wybierz, kto');
   });
+
+  describe('Dni wolne firmy', () => {
+    const addDaysOff = (fields: Record<string, string>) =>
+      post('/ustawienia/dni-wolne', { fromOn: '', toOn: '', note: '', person: 'Anna', ...fields });
+
+    it('adds a period that shows in the list with the reason and who added it', async () => {
+      const res = await addDaysOff({ fromOn: '2026-12-28', toOn: '2026-12-31', note: 'urlop' });
+      expect(res.statusCode).toBe(303);
+      const page = await settingsPage();
+      expect(page).toContain('28.12.2026 – 31.12.2026');
+      expect(page).toContain('urlop');
+      expect(page).toContain('kto wpisał: Anna');
+    });
+
+    it('a day off is not counted on the board (limit moves by a day)', async () => {
+      await post('/zlecenia', {
+        clientName: 'Jan Przykładowy',
+        phone: '600 100 200',
+        town: 'Przykładowo',
+        workTypeId: '1',
+        measurementOn: '2026-11-30',
+        person: 'Anna',
+      });
+      today = '2026-11-18'; // limit 2 dni od pn 16.11 → w środę czerwone
+      const rowOf = async () =>
+        (await app.inject({ method: 'GET', url: '/' })).body.match(/<tr\s+class="([^"]*)"/)?.[1];
+      expect(await rowOf()).toContain('c-red');
+      await addDaysOff({ fromOn: '2026-11-17' });
+      expect(await rowOf()).toContain('c-yellow');
+    });
+
+    it('removes a period', async () => {
+      await addDaysOff({ fromOn: '2026-12-28', note: 'do usunięcia' });
+      const res = await post('/ustawienia/dni-wolne/1/usun', {});
+      expect(res.statusCode).toBe(303);
+      expect(await settingsPage()).not.toContain('do usunięcia');
+    });
+
+    it('a wrong period shows a readable error', async () => {
+      const res = await addDaysOff({ fromOn: '2026-12-31', toOn: '2026-12-28' });
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('nie może być przed');
+    });
+  });
 });

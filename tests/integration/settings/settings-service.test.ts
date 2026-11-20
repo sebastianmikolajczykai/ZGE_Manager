@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AppDatabase } from '../../../src/db.js';
 import { SettingsService, DEFAULT_APP_SETTINGS } from '../../../src/modules/settings/settings-service.js';
+import { DaysOffRepository } from '../../../src/modules/settings/days-off-repository.js';
 
 /** Formularz z ekranu Ustawień: wszystkie pola jako tekst, checkbox obecny tylko gdy zaznaczony. */
 function form(overrides: Record<string, string> = {}): Record<string, string> {
@@ -134,7 +135,7 @@ describe('SettingsService (Ustawienia: kolory i przypomnienia)', () => {
       form({ yellowAfterIdleDays: '3', redAfterIdleDays: '5', warnDaysBeforeLimit: '2' }),
       'Łukasz',
     );
-    expect(settings.urgency()).toEqual({
+    expect(settings.urgency()).toMatchObject({
       yellowAfterIdleDays: 3,
       redAfterIdleDays: 5,
       warnDaysBeforeLimit: 2,
@@ -142,5 +143,12 @@ describe('SettingsService (Ustawienia: kolory i przypomnienia)', () => {
       blinkAfterRedDays: 7,
       dayMode: 'working',
     });
+  });
+
+  it('passes company days off to the colour rules', () => {
+    new DaysOffRepository(db).add({ fromOn: '2026-12-28', toOn: '', note: null }, 'Łukasz');
+    const isDayOff = settings.urgency().isDayOff;
+    expect(isDayOff?.('2026-12-28')).toBe(true);
+    expect(isDayOff?.('2026-12-29')).toBe(false);
   });
 });
