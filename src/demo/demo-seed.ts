@@ -89,6 +89,25 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
     doneAgo: [15, 14, 13, 12, 11, 10, 8, 7, 6, 5],
     measurementAgo: 8,
   },
+  // Oddane klientowi, czekają na zapłatę (zakładka Niezapłacone): 16 i 3 dni robocze temu.
+  {
+    client: 'Ryszard Kowalczyk (przykład)',
+    town: 'Wojnicz',
+    plot: '311/2',
+    price: 3300,
+    createdAgo: 45,
+    doneAgo: [44, 43, 42, 40, 38, 36, 35, 32, 28, 22, 18, 16],
+    measurementAgo: 35,
+  },
+  {
+    client: 'Ewa Grabowska (przykład)',
+    town: 'Radłów',
+    plot: '57/9',
+    price: 2900,
+    createdAgo: 30,
+    doneAgo: [29, 28, 27, 25, 23, 21, 20, 17, 13, 8, 5, 3],
+    measurementAgo: 20,
+  },
 ];
 
 const DEMO_PHONE = '500 000 000';

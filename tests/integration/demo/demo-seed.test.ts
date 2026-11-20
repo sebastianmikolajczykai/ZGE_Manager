@@ -9,6 +9,7 @@ import { OrderService } from '../../../src/modules/orders/order-service.js';
 import { BoardService } from '../../../src/modules/board/board-service.js';
 import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from '../../../src/modules/urgency/urgency-rules.js';
 import { OfferService } from '../../../src/modules/offers/offer-service.js';
+import { PaymentService } from '../../../src/modules/payments/payment-service.js';
 
 describe('seedDemo (przykładowe dane do demo)', () => {
   let dir: string;
@@ -50,6 +51,14 @@ describe('seedDemo (przykładowe dane do demo)', () => {
     expect(offers.length).toBeGreaterThanOrEqual(3);
     expect(new Set(offers.map((o) => o.urgency.colour))).toEqual(new Set(['green', 'yellow', 'red']));
     expect(offers.every((o) => o.clientName.includes('(przykład)'))).toBe(true);
+  });
+
+  it('adds example unpaid orders: one overdue (red) and one waiting (green)', () => {
+    seedDemo(db, today);
+    const rules = new UrgencyRules(DEFAULT_URGENCY_SETTINGS);
+    const unpaid = new PaymentService(db, new OrderService(db, () => today), rules, () => today).rows();
+    expect(unpaid.map((u) => u.urgency.colour)).toEqual(['red', 'green']);
+    expect(unpaid.every((u) => u.clientName.includes('(przykład)'))).toBe(true);
   });
 
   it('builds a real history with the configured people', () => {

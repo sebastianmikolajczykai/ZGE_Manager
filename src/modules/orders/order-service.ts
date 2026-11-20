@@ -3,10 +3,10 @@ import type { LocalDate } from '../urgency/day-counter.js';
 import type { StepKind } from '../work-types/work-type-definition.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
 import { parseOrderInput, type OrderInput } from './order-input.js';
-import { requirePerson } from '../common/form-fields.js';
+import { optional, requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
-export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone';
+export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone' | 'payment_call';
 
 export interface OrderStep {
   position: number;
@@ -14,6 +14,8 @@ export interface OrderStep {
   kind: StepKind;
   limitDays: number | null;
   provisional: boolean;
+  /** Krok „Zapłata”: zlecenie widać wtedy w zakładce Niezapłacone. */
+  payment: boolean;
   status: StepStatus;
   startedOn: LocalDate | null;
   doneOn: LocalDate | null;
@@ -37,6 +39,8 @@ export interface HistoryEntry {
   action: HistoryAction;
   stepPosition: number | null;
   stepName: string | null;
+  /** Notatka, np. z rozmowy o zapłacie. */
+  note: string | null;
 }
 
 const GROSZE_PER_PLN = 100;
@@ -86,8 +90,8 @@ export class OrderService {
           ).lastInsertRowid,
       );
       const insertStep = this.db.connection.prepare(
-        `INSERT INTO order_steps (order_id, position, name, kind, limit_days, provisional, status, started_on)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO order_steps (order_id, position, name, kind, limit_days, provisional, payment, status, started_on)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const s of workType.steps) {
         const first = s.position === 1;
@@ -98,6 +102,7 @@ export class OrderService {
           s.kind,
           s.limitDays,
           s.provisional ? 1 : 0,
+          s.payment ? 1 : 0,
           first ? 'active' : 'pending',
           first ? today : null,
         );
@@ -132,6 +137,21 @@ export class OrderService {
   }
 
   /** „Sprawdzone dziś” w kroku codziennym: zapis kontroli, krok zostaje otwarty. */
+  /** Rozmowa z klientem o zapłacie: zapisuje datę kontaktu (licznik od nowa) i notatkę w historii. */
+  recordPaymentCall(orderId: number, person: string, note: string | null): void {
+    const who = requirePerson(person);
+    const step = this.require(orderId).steps.find((s) => s.status === 'active');
+    if (!step?.payment) throw new Error(`Zlecenie nr ${orderId} nie czeka na zapłatę`);
+    this.inTransaction(() => {
+      this.db.connection
+        .prepare(
+          'UPDATE order_steps SET last_checked_on = ?, last_checked_by = ? WHERE order_id = ? AND position = ?',
+        )
+        .run(this.today(), who, orderId, step.position);
+      this.log(orderId, who, 'payment_call', step, optional(note));
+    });
+  }
+
   checkToday(orderId: number, position: number, person: string): void {
     const who = requirePerson(person);
     const step = this.requireActiveStep(orderId, position);
@@ -185,7 +205,7 @@ export class OrderService {
   history(orderId: number): HistoryEntry[] {
     const rows = this.db.connection
       .prepare(
-        'SELECT happened_on, person, action, step_position, step_name FROM order_history WHERE order_id = ? ORDER BY id',
+        'SELECT happened_on, person, action, step_position, step_name, note FROM order_history WHERE order_id = ? ORDER BY id',
       )
       .all(orderId) as HistoryRow[];
     return rows.map((r) => ({
@@ -194,6 +214,7 @@ export class OrderService {
       action: r.action,
       stepPosition: r.step_position,
       stepName: r.step_name,
+      note: r.note,
     }));
   }
 
@@ -219,12 +240,18 @@ export class OrderService {
     return step;
   }
 
-  private log(orderId: number, person: string, action: HistoryAction, step: OrderStep | null): void {
+  private log(
+    orderId: number,
+    person: string,
+    action: HistoryAction,
+    step: OrderStep | null,
+    note: string | null = null,
+  ): void {
     this.db.connection
       .prepare(
-        'INSERT INTO order_history (order_id, happened_on, person, action, step_position, step_name) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO order_history (order_id, happened_on, person, action, step_position, step_name, note) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(orderId, this.today(), person, action, step?.position ?? null, step?.name ?? null);
+      .run(orderId, this.today(), person, action, step?.position ?? null, step?.name ?? null, note);
   }
 
   private inTransaction<T>(work: () => T): T {
@@ -241,6 +268,7 @@ export class OrderService {
       kind: r.kind,
       limitDays: r.limit_days,
       provisional: r.provisional === 1,
+      payment: r.payment === 1,
       status: r.status,
       startedOn: r.started_on,
       doneOn: r.done_on,
@@ -273,6 +301,7 @@ interface StepRow {
   kind: StepKind;
   limit_days: number | null;
   provisional: number;
+  payment: number;
   status: StepStatus;
   started_on: string | null;
   done_on: string | null;
@@ -287,6 +316,7 @@ interface HistoryRow {
   action: HistoryAction;
   step_position: number | null;
   step_name: string | null;
+  note: string | null;
 }
 
 function toOrder(r: OrderRow, steps: OrderStep[]): Order {

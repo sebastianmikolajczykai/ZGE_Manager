@@ -9,6 +9,7 @@ import { OrderService } from './modules/orders/order-service.js';
 import { BoardService } from './modules/board/board-service.js';
 import { PeopleRepository } from './modules/people/people-repository.js';
 import { OfferService } from './modules/offers/offer-service.js';
+import { PaymentService } from './modules/payments/payment-service.js';
 import { registerRoutes } from './web/routes.js';
 
 /** Osoby wpisywane przy pierwszym uruchomieniu (potem edycja w Ustawieniach). */
@@ -36,6 +37,7 @@ export function buildApp({
   const rules = new UrgencyRules(DEFAULT_URGENCY_SETTINGS);
   const board = new BoardService(db, orders, rules, today);
   const offers = new OfferService(db, today, rules);
+  const payments = new PaymentService(db, orders, rules, today);
 
   app.get('/health', async (_req, reply) => {
     try {
@@ -46,6 +48,6 @@ export function buildApp({
     }
   });
 
-  registerRoutes(app, { orders, board, people, workTypes, offers, today });
+  registerRoutes(app, { orders, board, people, workTypes, offers, payments, today });
   return app;
 }

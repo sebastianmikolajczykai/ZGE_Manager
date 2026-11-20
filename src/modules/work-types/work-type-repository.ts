@@ -8,6 +8,7 @@ import {
 
 export interface StoredStep extends StepTemplate {
   position: number;
+  payment: boolean;
 }
 
 export interface WorkType {
@@ -22,6 +23,7 @@ interface StepRow {
   kind: StepKind;
   limit_days: number | null;
   provisional: number;
+  payment: number;
 }
 
 /** Zapis i odczyt rodzajów prac oraz ich kroków w bazie. */
@@ -40,10 +42,18 @@ export class WorkTypeRepository {
         conn.prepare('INSERT INTO work_types (name) VALUES (?)').run(def.name.trim()).lastInsertRowid,
       );
       const insertStep = conn.prepare(
-        'INSERT INTO step_templates (work_type_id, position, name, kind, limit_days, provisional) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO step_templates (work_type_id, position, name, kind, limit_days, provisional, payment) VALUES (?, ?, ?, ?, ?, ?, ?)',
       );
       def.steps.forEach((s, i) =>
-        insertStep.run(id, i + 1, s.name.trim(), s.kind, s.limitDays, s.provisional ? 1 : 0),
+        insertStep.run(
+          id,
+          i + 1,
+          s.name.trim(),
+          s.kind,
+          s.limitDays,
+          s.provisional ? 1 : 0,
+          s.payment ? 1 : 0,
+        ),
       );
       return id;
     })();
@@ -77,7 +87,7 @@ export class WorkTypeRepository {
   private stepsOf(workTypeId: number): StoredStep[] {
     const rows = this.db.connection
       .prepare(
-        'SELECT position, name, kind, limit_days, provisional FROM step_templates WHERE work_type_id = ? ORDER BY position',
+        'SELECT position, name, kind, limit_days, provisional, payment FROM step_templates WHERE work_type_id = ? ORDER BY position',
       )
       .all(workTypeId) as StepRow[];
     return rows.map((r) => ({
@@ -86,6 +96,7 @@ export class WorkTypeRepository {
       kind: r.kind,
       limitDays: r.limit_days,
       provisional: r.provisional === 1,
+      payment: r.payment === 1,
     }));
   }
 }

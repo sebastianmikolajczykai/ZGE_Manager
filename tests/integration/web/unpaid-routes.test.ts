@@ -1,0 +1,110 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import type { FastifyInstance } from 'fastify';
+import { AppDatabase } from '../../../src/db.js';
+import { buildApp } from '../../../src/app.js';
+
+const FORM = { 'content-type': 'application/x-www-form-urlencoded' };
+const STEPS_BEFORE_PAYMENT = 12; // „Podział nieruchomości”: krok 13 = Zapłata
+
+describe('Niezapłacone screens', () => {
+  let dir: string;
+  let db: AppDatabase;
+  let app: FastifyInstance;
+  let today: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'zge-'));
+    db = AppDatabase.open(path.join(dir, 'zge.db'));
+    db.migrate();
+    today = '2026-11-20';
+    app = buildApp({ db, today: () => today, defaultPeople: ['Anna', 'Piotr'] });
+  });
+
+  afterEach(async () => {
+    await app.close();
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const post = (url: string, fields: Record<string, string>) =>
+    app.inject({ method: 'POST', url, headers: FORM, payload: new URLSearchParams(fields).toString() });
+
+  const createOrder = async () => {
+    const res = await post('/zlecenia', {
+      clientName: 'Karol Dłużnik',
+      phone: '600 100 200',
+      town: 'Przykładowo',
+      workTypeId: '1',
+      measurementOn: '2026-11-20',
+      pricePln: '3 000',
+      person: 'Anna',
+    });
+    return Number(String(res.headers.location).split('zlecenie=')[1]);
+  };
+
+  const handOver = async () => {
+    const id = await createOrder();
+    for (let step = 1; step <= STEPS_BEFORE_PAYMENT; step++) {
+      await post(`/zlecenia/${id}/kroki/${step}/zrobione`, { person: 'Anna' });
+    }
+    return id;
+  };
+
+  const get = (url: string) => app.inject({ method: 'GET', url });
+
+  it('menu has a "Niezapłacone" tab with an empty state', async () => {
+    const res = await get('/niezaplacone');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('href="/niezaplacone"');
+    expect(res.body).toContain('Brak niezapłaconych zleceń');
+  });
+
+  it('an order handed over to the client moves from the board to Niezapłacone', async () => {
+    const id = await handOver();
+    expect((await get('/')).body).not.toContain('Karol Dłużnik');
+    const page = await get(`/niezaplacone?zlecenie=${id}`);
+    expect(page.body).toContain('Karol Dłużnik');
+    expect(page.body).toContain('3000 zł');
+    expect(page.body).toContain('Rozmowa: Piotr');
+    expect(page.body).toContain('Zapłacone: Anna');
+  });
+
+  it('after the payment limit (14 working days) the row is red: "zadzwoń i przypomnij o zapłacie"', async () => {
+    const id = await handOver(); // 20.11
+    today = '2026-12-10'; // 14. dzień roboczy
+    const page = await get(`/niezaplacone?zlecenie=${id}`);
+    expect(page.body).toContain('c-red');
+    expect(page.body).toContain('zadzwoń i przypomnij o zapłacie');
+  });
+
+  it('a reminder call is kept in the order history with its note', async () => {
+    const id = await handOver();
+    const res = await post(`/niezaplacone/${id}/rozmowa`, { person: 'Piotr', note: 'zapłaci w piątek' });
+    expect(res.statusCode).toBe(303);
+    const page = await get(`/niezaplacone?zlecenie=${id}`);
+    expect(page.body).toContain('Piotr: przypomnienie o zapłacie (zapłaci w piątek)');
+  });
+
+  it('"Zapłacone" closes the order: it leaves Niezapłacone, the card says completed', async () => {
+    const id = await handOver();
+    await post(`/niezaplacone/${id}/zaplacone`, { person: 'Anna' });
+    expect((await get('/niezaplacone')).body).toContain('Brak niezapłaconych zleceń');
+    expect((await get(`/?zlecenie=${id}`)).body).toContain('Zlecenie zakończone');
+  });
+
+  it('an action on an order that is not waiting for payment shows a readable error', async () => {
+    const id = await createOrder();
+    const res = await post(`/niezaplacone/${id}/zaplacone`, { person: 'Anna' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('nie czeka na zapłatę');
+  });
+
+  it('unknown order shows 404', async () => {
+    const res = await get('/niezaplacone?zlecenie=999');
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toContain('Nie ma zlecenia o numerze 999');
+  });
+});

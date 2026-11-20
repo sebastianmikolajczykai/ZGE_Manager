@@ -26,7 +26,7 @@ export const DEFAULT_WORK_TYPES: readonly WorkTypeDefinition[] = [
       { name: 'Dokumentacja dla gminy do wydania decyzji', kind: 'own', limitDays: 2, provisional: false },
       { name: 'Decyzja gminy', kind: 'waiting', limitDays: 30, provisional: true },
       { name: 'Oddanie klientowi', kind: 'own', limitDays: 2, provisional: true },
-      { name: 'Zapłata', kind: 'waiting', limitDays: 14, provisional: true },
+      { name: 'Zapłata', kind: 'waiting', limitDays: 14, provisional: true, payment: true },
     ],
   },
 ];

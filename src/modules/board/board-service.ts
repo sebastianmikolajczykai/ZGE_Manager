@@ -38,6 +38,7 @@ export class BoardService {
     const today = this.today();
     return this.orders
       .listActive()
+      .filter((order) => !order.steps.some((st) => st.status === 'active' && st.payment)) // te są w Niezapłaconych
       .map((order) => this.toRow(order, today))
       .sort((a, b) => UrgencyRules.compare(a.sortKey, b.sortKey))
       .map((r) => r.row);
