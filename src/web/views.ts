@@ -1,4 +1,5 @@
 import { html, SafeHtml } from './html.js';
+import { googleCalendarLink } from '../modules/calendar/google-calendar-link.js';
 import { fold, formatDate, formatPrice, personButtons, rowClass } from './view-helpers.js';
 import type { BoardRow } from '../modules/board/board-service.js';
 import type { HistoryEntry, Order, OrderStep } from '../modules/orders/order-service.js';
@@ -122,7 +123,10 @@ export function orderDetail(
       ${
         order.measurementOn
           ? html`<dt>Pomiar</dt>
-              <dd>${formatDate(order.measurementOn)}</dd>`
+              <dd>
+                ${formatDate(order.measurementOn)}
+                ${order.status === 'active' ? calendarButton(order, workTypeName) : ''}
+              </dd>`
           : ''
       }
       <dt>Przyjęte</dt>
@@ -137,6 +141,24 @@ export function orderDetail(
     <h3>Kroki</h3>
     ${stepsSection(order, people)} ${historySection(history)}
   </section>`;
+}
+
+/** Przycisk „Dodaj do Kalendarza Google” z terminem pomiaru (otwiera formularz Google w nowej karcie). */
+function calendarButton(order: Order, workTypeName: string): SafeHtml {
+  const place = order.plot ? `${order.town}, dz. ${order.plot}` : order.town;
+  const link = googleCalendarLink({
+    title: `Pomiar: ${order.clientName}, ${order.town}`,
+    date: order.measurementOn ?? '',
+    location: place,
+    details: [
+      `Telefon: ${order.phone}`,
+      `Rodzaj pracy: ${workTypeName}`,
+      `Zlecenie nr ${order.id} w ZGE Menedżerze`,
+    ].join('\n'),
+  });
+  return html`<a class="button secondary small" href="${link}" target="_blank" rel="noopener"
+    ><span aria-hidden="true">📅</span> Dodaj do Kalendarza Google</a
+  >`;
 }
 
 /** Zrobione kroki zwinięte pod strzałką, aktywny i kolejne widoczne (z oryginalnymi numerami). */
@@ -307,7 +329,7 @@ form.people { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0; }
 button { font:inherit; border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
 a.button { display:inline-block; text-decoration:none; font-weight:600; border-radius:6px; padding:8px 12px; }
 button.primary, a.button.primary { background:var(--brand); color:#fff; } button.secondary, a.button.secondary { background:#e3f3e6; color:#14610a; }
-button.danger { background:var(--red); color:var(--red-ink); } button.small { padding:4px 8px; font-size:14px; }
+button.danger { background:var(--red); color:var(--red-ink); } button.small, a.button.small { padding:4px 10px; font-size:15px; } a.button.small { white-space:nowrap; margin-top:4px; }
 button.big { font-size:20px; padding:12px 20px; }
 /* Zwijane sekcje: klikalna strzałka (obraca się po rozwinięciu). */
 details.fold { margin:10px 0; } details.fold > summary { cursor:pointer; list-style:none; font-weight:700; padding:6px 0; user-select:none; }

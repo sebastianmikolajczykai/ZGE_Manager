@@ -110,3 +110,31 @@ describe('karta zlecenia: przycisk cofania', () => {
     expect(render([step(1, 'active')])).not.toContain('Cofnij ostatnie odhaczenie');
   });
 });
+
+describe('karta zlecenia: termin pomiaru w Kalendarzu Google', () => {
+  const withMeasurement = (status: Order['status'] = 'active'): string =>
+    orderDetail(
+      { ...order([step(1, 'active')]), measurementOn: '2026-11-30', plot: '123/4', status },
+      'Podział',
+      null,
+      HISTORY,
+      PEOPLE,
+    ).value;
+
+  it('offers "Dodaj do Kalendarza Google" next to the measurement date, opening in a new tab', () => {
+    const page = withMeasurement();
+    const link = page.match(/<a[^>]*href="(https:\/\/calendar\.google\.com[^"]*)"[^>]*>([\s\S]*?)<\/a/);
+    expect(link?.[2]).toContain('Dodaj do Kalendarza Google');
+    const url = new URL((link?.[1] ?? '').replaceAll('&amp;', '&'));
+    expect(url.searchParams.get('text')).toBe('Pomiar: Klient (przykład), Brzesko');
+    expect(url.searchParams.get('dates')).toBe('20261130/20261201');
+    expect(url.searchParams.get('location')).toBe('Brzesko, dz. 123/4');
+    expect(url.searchParams.get('details')).toContain('Telefon: 500 000 000');
+    expect(page).toMatch(/href="https:\/\/calendar\.google\.com[^"]*"[^>]*target="_blank"/);
+  });
+
+  it('has no calendar button without a measurement date or for a finished order', () => {
+    expect(render([step(1, 'active')])).not.toContain('calendar.google.com');
+    expect(withMeasurement('completed')).not.toContain('calendar.google.com');
+  });
+});
