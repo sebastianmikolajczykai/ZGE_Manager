@@ -69,3 +69,29 @@ describe('layout: menu boczne (styl C)', () => {
     expect(menu).toMatch(/class="badge" aria-hidden="true"/);
   });
 });
+
+describe('layout: okienko „Czy na pewno?”', () => {
+  const withConfirm = layout('Tablica', html`<p>treść</p>`, 60, undefined, true).toString();
+  const without = layout('Tablica', html`<p>treść</p>`, 60, undefined, false).toString();
+
+  it('has a centred confirmation window with "Tak" and "Anuluj" when switched on', () => {
+    const dialog = withConfirm.slice(withConfirm.indexOf('<dialog'), withConfirm.indexOf('</dialog>'));
+    expect(dialog).toContain('Czy na pewno?');
+    expect(dialog).toMatch(/<button[^>]*value="tak"[^>]*>\s*Tak, zapisz/);
+    expect(dialog).toMatch(/<button[^>]*value="anuluj"[^>]*>\s*Anuluj/);
+  });
+
+  it('asks only for clicks on a card (orders, offers, payments), not on the settings screen', () => {
+    const script = withConfirm.slice(withConfirm.indexOf('<script>'), withConfirm.indexOf('</script>'));
+    expect(script).toContain('.detail form.people');
+  });
+
+  it('does not reload the page while the question is open', () => {
+    const script = withConfirm.slice(withConfirm.indexOf('<script>'), withConfirm.indexOf('</script>'));
+    expect(script).toContain('dialog[open]');
+  });
+
+  it('has no window when switched off in Ustawienia', () => {
+    expect(without).not.toContain('<dialog');
+  });
+});

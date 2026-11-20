@@ -13,6 +13,7 @@ function form(overrides: Record<string, string> = {}): Record<string, string> {
     redAfterIdleDays: '3',
     warnDaysBeforeLimit: '1',
     blinkEnabled: '1',
+    confirmActions: '1',
     blinkAfterRedDays: '7',
     offerFollowUpDays: '7',
     refreshSeconds: '60',
@@ -47,6 +48,19 @@ describe('SettingsService (Ustawienia: kolory i przypomnienia)', () => {
       blinkAfterRedDays: 7,
       offerFollowUpDays: 7,
       refreshSeconds: 60,
+      confirmActions: true,
+    });
+  });
+
+  it('can switch off the "Czy na pewno?" question and logs it as words', () => {
+    const withoutConfirm = form({});
+    delete withoutConfirm.confirmActions;
+    settings.update(withoutConfirm, 'Łukasz');
+    expect(settings.get().confirmActions).toBe(false);
+    expect(settings.history()[0]).toMatchObject({
+      label: 'Pytaj „Czy na pewno?” po kliknięciu osoby',
+      oldValue: 'tak',
+      newValue: 'nie',
     });
   });
 

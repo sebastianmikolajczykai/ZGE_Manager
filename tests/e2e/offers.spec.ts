@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { clickAndConfirm } from './confirm.js';
 
 test('oferta: dodanie, telefon z notatką, przyjęcie i zlecenie z wypełnionymi danymi', async ({ page }) => {
   const client = `Oferta E2E ${Date.now()}`;
@@ -20,7 +21,7 @@ test('oferta: dodanie, telefon z notatką, przyjęcie i zlecenie z wypełnionymi
   await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText('3200 zł');
 
   await panel.getByLabel('Notatka z rozmowy').fill('myśli, oddzwoni w pon.');
-  await panel.getByRole('button', { name: 'Rozmowa: Bartek' }).click();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Rozmowa: Bartek' }));
   await panel.getByText(/^Historia \(\d+\)$/).click();
   await expect(panel.getByText('Bartek: telefon (myśli, oddzwoni w pon.)')).toBeVisible();
 

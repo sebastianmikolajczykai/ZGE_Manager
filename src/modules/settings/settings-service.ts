@@ -13,6 +13,8 @@ export interface AppSettings {
   blinkAfterRedDays: number;
   offerFollowUpDays: number;
   refreshSeconds: number;
+  /** Okienko „Czy na pewno?” po kliknięciu osoby na karcie (zlecenie, oferta, zapłata). */
+  confirmActions: boolean;
 }
 
 export type SettingKey = keyof AppSettings;
@@ -25,6 +27,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   blinkAfterRedDays: 7,
   offerFollowUpDays: 7,
   refreshSeconds: 60,
+  confirmActions: true,
 };
 
 /** Opis pola: etykieta na ekranie i w historii, dozwolony zakres (dla liczb). */
@@ -86,6 +89,14 @@ export const SETTING_FIELDS: readonly SettingField[] = [
     type: 'number',
     min: 15,
     max: 600,
+  },
+  {
+    key: 'confirmActions',
+    label: 'Pytaj „Czy na pewno?” po kliknięciu osoby',
+    hint: 'np. „Zapłacone: Bartek” trzeba potwierdzić drugim kliknięciem',
+    type: 'switch',
+    min: 0,
+    max: 1,
   },
 ];
 
@@ -211,7 +222,7 @@ function parseNumber(field: SettingField, text: string): number {
 }
 
 function setValue(target: AppSettings, field: SettingField, value: number): void {
-  if (field.key === 'blinkEnabled') target.blinkEnabled = value === SWITCH_ON;
+  if (field.key === 'blinkEnabled' || field.key === 'confirmActions') target[field.key] = value === SWITCH_ON;
   else target[field.key] = value;
 }
 
