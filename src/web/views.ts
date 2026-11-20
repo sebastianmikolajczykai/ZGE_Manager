@@ -300,7 +300,7 @@ body { margin:0; font:18px/1.4 system-ui, "Segoe UI", sans-serif; color:var(--in
 .top { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; background:var(--header); color:#fff; }
 .brand { display:flex; align-items:center; }
 .logo { display:inline-grid; border:2px solid #fff; padding:2px 8px 4px; margin-right:16px; line-height:1; font-weight:700; letter-spacing:.04em; }
-.logo-top { font-size:15px; text-align:right; } .logo-zge { font-size:22px; border:2px solid #fff; padding:1px 4px; justify-self:start; margin-top:-2px; }
+.logo-top { font-size:15px; text-align:right; } .logo-zge { font-size:22px; border:2px solid #fff; padding:1px 4px; justify-self:start; margin-top:3px; }
 .brand .app { font-size:20px; font-weight:600; }
 nav a { color:var(--brand-light); margin-left:18px; text-decoration:none; font-weight:700; text-transform:uppercase; font-size:16px; }
 nav a.primary { background:var(--brand); color:#fff; padding:8px 14px; border-radius:6px; }
