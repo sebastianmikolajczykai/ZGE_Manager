@@ -8,6 +8,7 @@ import { seedDemo } from '../../../src/demo/demo-seed.js';
 import { OrderService } from '../../../src/modules/orders/order-service.js';
 import { BoardService } from '../../../src/modules/board/board-service.js';
 import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from '../../../src/modules/urgency/urgency-rules.js';
+import { OfferService } from '../../../src/modules/offers/offer-service.js';
 
 describe('seedDemo (przykładowe dane do demo)', () => {
   let dir: string;
@@ -41,6 +42,14 @@ describe('seedDemo (przykładowe dane do demo)', () => {
     expect(new Set(board.map((r) => r.urgency.colour))).toEqual(new Set(['green', 'yellow', 'red']));
     expect(board.some((r) => r.urgency.blink)).toBe(true);
     expect(board.every((r) => r.clientName.includes('(przykład)'))).toBe(true);
+  });
+
+  it('adds example offers in every colour, marked as examples', () => {
+    seedDemo(db, today);
+    const offers = new OfferService(db, () => today, new UrgencyRules(DEFAULT_URGENCY_SETTINGS)).rows();
+    expect(offers.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(offers.map((o) => o.urgency.colour))).toEqual(new Set(['green', 'yellow', 'red']));
+    expect(offers.every((o) => o.clientName.includes('(przykład)'))).toBe(true);
   });
 
   it('builds a real history with the configured people', () => {

@@ -3,6 +3,7 @@ import type { LocalDate } from '../urgency/day-counter.js';
 import type { StepKind } from '../work-types/work-type-definition.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
 import { parseOrderInput, type OrderInput } from './order-input.js';
+import { requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
 export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone';
@@ -248,12 +249,6 @@ export class OrderService {
       lastCheckedBy: r.last_checked_by,
     }));
   }
-}
-
-function requirePerson(person: string): string {
-  const who = person.trim();
-  if (!who) throw new Error('Wybierz, kto wykonał czynność');
-  return who;
 }
 
 interface OrderRow {

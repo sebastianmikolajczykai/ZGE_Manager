@@ -8,6 +8,7 @@ import { DEFAULT_WORK_TYPES } from './modules/work-types/default-work-types.js';
 import { OrderService } from './modules/orders/order-service.js';
 import { BoardService } from './modules/board/board-service.js';
 import { PeopleRepository } from './modules/people/people-repository.js';
+import { OfferService } from './modules/offers/offer-service.js';
 import { registerRoutes } from './web/routes.js';
 
 /** Osoby wpisywane przy pierwszym uruchomieniu (potem edycja w Ustawieniach). */
@@ -32,7 +33,9 @@ export function buildApp({
   workTypes.seedDefaults(DEFAULT_WORK_TYPES);
   people.seedIfEmpty(defaultPeople);
   const orders = new OrderService(db, today);
-  const board = new BoardService(db, orders, new UrgencyRules(DEFAULT_URGENCY_SETTINGS), today);
+  const rules = new UrgencyRules(DEFAULT_URGENCY_SETTINGS);
+  const board = new BoardService(db, orders, rules, today);
+  const offers = new OfferService(db, today, rules);
 
   app.get('/health', async (_req, reply) => {
     try {
@@ -43,6 +46,6 @@ export function buildApp({
     }
   });
 
-  registerRoutes(app, { orders, board, people, workTypes, today });
+  registerRoutes(app, { orders, board, people, workTypes, offers, today });
   return app;
 }

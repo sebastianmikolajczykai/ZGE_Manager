@@ -1,4 +1,5 @@
 import { DayCounter, type LocalDate } from '../urgency/day-counter.js';
+import { optional, parsePhone, parsePrice, required } from '../common/form-fields.js';
 
 /** Dane zlecenia wpisywane przy dodawaniu. */
 export interface OrderInput {
@@ -14,10 +15,6 @@ export interface OrderInput {
   measurementOn: LocalDate | null;
 }
 
-const MIN_PHONE_DIGITS = 9;
-const MAX_PHONE_DIGITS = 12;
-const PHONE_ALLOWED = /^\+?[\d\s-]+$/;
-const GROSZE_PER_PLN = 100;
 const dateChecker = new DayCounter('calendar');
 
 /** Sprawdza i porządkuje dane zlecenia; rzuca czytelny błąd przy złych danych. */
@@ -35,37 +32,8 @@ export function parseOrderInput(raw: OrderInput): OrderInput {
   };
 }
 
-function required(value: string, label: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) throw new Error(`Pole „${label}” jest wymagane`);
-  return trimmed;
-}
-
-function optional(value: string | null): string | null {
-  const trimmed = value?.trim() ?? '';
-  return trimmed === '' ? null : trimmed;
-}
-
-function parsePhone(value: string): string {
-  const trimmed = value.trim();
-  const digits = trimmed.replace(/\D/g, '').length;
-  if (!PHONE_ALLOWED.test(trimmed) || digits < MIN_PHONE_DIGITS || digits > MAX_PHONE_DIGITS) {
-    throw new Error(`Nieprawidłowy numer telefonu: „${value}”`);
-  }
-  return trimmed;
-}
-
 function parseWorkTypeId(value: number): number {
   if (!Number.isInteger(value) || value < 1) throw new Error('Wybierz rodzaj pracy');
-  return value;
-}
-
-function parsePrice(value: number | null): number | null {
-  if (value === null) return null;
-  const hasAtMostTwoDecimals = Number.isInteger(Math.round(value * GROSZE_PER_PLN * 1e6) / 1e6);
-  if (!Number.isFinite(value) || value < 0 || !hasAtMostTwoDecimals) {
-    throw new Error(`Nieprawidłowa cena: ${value} (podaj kwotę w zł, najwyżej 2 miejsca po przecinku)`);
-  }
   return value;
 }
 

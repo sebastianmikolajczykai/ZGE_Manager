@@ -3,6 +3,8 @@ import { DayCounter, type LocalDate } from '../modules/urgency/day-counter.js';
 import { OrderService } from '../modules/orders/order-service.js';
 import { PeopleRepository } from '../modules/people/people-repository.js';
 import { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
+import { OfferService } from '../modules/offers/offer-service.js';
+import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from '../modules/urgency/urgency-rules.js';
 
 /**
  * Przykładowe (zmyślone) zlecenie do demo. Daty liczone w dniach roboczych wstecz od „dziś”.
@@ -92,6 +94,28 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
 const DEMO_PHONE = '500 000 000';
 const DEMO_OFFICE = 'Urząd Miejski (przykład)';
 
+/** Przykładowa oferta: wysłana `sentAgo` dni roboczych temu, opcjonalnie telefon `calledAgo` dni temu. */
+interface DemoOffer {
+  client: string;
+  town: string;
+  price: number;
+  sentAgo: number;
+  call?: { ago: number; note: string };
+}
+
+const DEMO_OFFERS: readonly DemoOffer[] = [
+  { client: 'Zofia Mazur (przykład)', town: 'Brzesko', price: 2400, sentAgo: 9 },
+  { client: 'Adam Krawczyk (przykład)', town: 'Iwkowa', price: 3100, sentAgo: 6 },
+  {
+    client: 'Barbara Duda (przykład)',
+    town: 'Borzęcin',
+    price: 2700,
+    sentAgo: 10,
+    call: { ago: 3, note: 'myśli, oddzwoni' },
+  },
+  { client: 'Michał Pawlak (przykład)', town: 'Zakliczyn', price: 3600, sentAgo: 1 },
+];
+
 /**
  * Wypełnia PUSTĄ bazę zmyślonymi zleceniami do pokazu (demo na Renderze).
  * Gdy w bazie jest choć jedno zlecenie, nic nie robi – nie dotknie prawdziwych danych.
@@ -131,6 +155,28 @@ export function seedDemo(db: AppDatabase, today: LocalDate): void {
     if (demo.checkedAgo !== undefined) {
       clock = calendar.ago(demo.checkedAgo);
       orders.checkToday(id, demo.doneAgo.length + 1, person(n + 2));
+    }
+  });
+
+  const offers = new OfferService(db, () => clock, new UrgencyRules(DEFAULT_URGENCY_SETTINGS));
+  DEMO_OFFERS.forEach((demo, n) => {
+    clock = today;
+    const id = offers.create(
+      {
+        clientName: demo.client,
+        phone: DEMO_PHONE,
+        workTypeId: workType.id,
+        sentOn: calendar.ago(demo.sentAgo),
+        town: demo.town,
+        plot: null,
+        pricePln: demo.price,
+        note: null,
+      },
+      person(n + 1),
+    );
+    if (demo.call) {
+      clock = calendar.ago(demo.call.ago);
+      offers.recordCall(id, person(n), demo.call.note, 'again');
     }
   });
 }
