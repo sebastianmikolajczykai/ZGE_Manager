@@ -6,7 +6,7 @@ import { parseOrderInput, type OrderInput } from './order-input.js';
 import { optional, requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
-export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone' | 'payment_call';
+export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone' | 'payment_call' | 'limit_changed';
 
 export interface OrderStep {
   position: number;
@@ -149,6 +149,20 @@ export class OrderService {
         )
         .run(this.today(), who, orderId, step.position);
       this.log(orderId, who, 'payment_call', step, optional(note));
+    });
+  }
+
+  /** Zmienia limit aktywnego kroku tylko w tym zleceniu (np. urząd zapowiedział dłuższy termin). */
+  changeStepLimit(orderId: number, position: number, limitText: string, person: string): void {
+    const who = requirePerson(person);
+    const step = this.requireActiveStep(orderId, position);
+    if (step.limitDays === null) throw new Error(`Krok „${step.name}” nie ma limitu dni`);
+    const limit = parseStepLimit(limitText);
+    this.inTransaction(() => {
+      this.db.connection
+        .prepare('UPDATE order_steps SET limit_days = ?, provisional = 0 WHERE order_id = ? AND position = ?')
+        .run(limit, orderId, position);
+      this.log(orderId, who, 'limit_changed', step, `${step.limitDays} → ${limit} dni`);
     });
   }
 
@@ -336,4 +350,14 @@ function toOrder(r: OrderRow, steps: OrderStep[]): Order {
     completedOn: r.completed_on,
     steps,
   };
+}
+
+const MAX_STEP_LIMIT_DAYS = 365;
+
+function parseStepLimit(text: string): number {
+  const value = Number(text.trim());
+  if (text.trim() === '' || !Number.isInteger(value) || value < 1 || value > MAX_STEP_LIMIT_DAYS) {
+    throw new Error(`Limit musi być liczbą dni roboczych od 1 do ${MAX_STEP_LIMIT_DAYS}`);
+  }
+  return value;
 }

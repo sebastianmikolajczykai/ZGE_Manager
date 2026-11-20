@@ -191,4 +191,26 @@ describe('web routes', () => {
     const page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
     expect(page.body).toContain('Dodaj osoby w Ustawieniach');
   });
+
+  it('changes the limit of the active step in one order and shows it in the history', async () => {
+    await createOrder();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/kroki/1/limit',
+      headers: FORM,
+      payload: 'limitDays=6&person=Piotr',
+    });
+    expect(res.statusCode).toBe(303);
+    const card = await app.inject({ method: 'GET', url: '/?zlecenie=1' });
+    expect(card.body).toMatch(/limit 6 dni/);
+    expect(card.body).toContain('Piotr: zmiana limitu „Ustalenie terminu pomiaru w terenie” (2 → 6 dni)');
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/kroki/1/limit',
+      headers: FORM,
+      payload: 'limitDays=0&person=Piotr',
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.body).toContain('od 1 do 365');
+  });
 });

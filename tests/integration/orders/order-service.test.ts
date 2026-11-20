@@ -188,4 +188,42 @@ describe('OrderService', () => {
   it('refuses actions on an unknown order', () => {
     expect(() => service.completeStep(42, 1, PERSON)).toThrow(/Nie ma zlecenia/);
   });
+
+  describe('zmiana limitu w jednym zleceniu', () => {
+    it('changes the limit of the active step in this order only and logs it', () => {
+      const id = service.create(input(), PERSON);
+      const other = service.create(input(), PERSON);
+      service.changeStepLimit(id, 1, '5', OTHER);
+      expect(service.get(id)?.steps[0]).toMatchObject({ limitDays: 5, provisional: false });
+      expect(service.get(other)?.steps[0]?.limitDays).toBe(2);
+      expect(service.history(id).at(-1)).toMatchObject({
+        person: OTHER,
+        action: 'limit_changed',
+        stepName: 'Pierwszy',
+        note: '2 → 5 dni',
+      });
+    });
+
+    it('a provisional limit becomes confirmed when changed', () => {
+      const id = service.create(input(), PERSON);
+      service.completeStep(id, 1, PERSON);
+      service.completeStep(id, 2, PERSON);
+      service.changeStepLimit(id, 3, '20', PERSON);
+      expect(service.get(id)?.steps[2]).toMatchObject({ limitDays: 20, provisional: false });
+    });
+
+    it.each(['0', 'pięć', '2.5', '', '400'])('rejects the limit "%s"', (limit) => {
+      const id = service.create(input(), PERSON);
+      expect(() => service.changeStepLimit(id, 1, limit, PERSON)).toThrow(/od 1 do 365/);
+      expect(service.get(id)?.steps[0]?.limitDays).toBe(2);
+    });
+
+    it('refuses steps without a limit, steps not active, and a missing person', () => {
+      const id = service.create(input(), PERSON);
+      expect(() => service.changeStepLimit(id, 3, '5', PERSON)).toThrow(/nie jest aktywny/);
+      service.completeStep(id, 1, PERSON);
+      expect(() => service.changeStepLimit(id, 2, '5', PERSON)).toThrow(/nie ma limitu/);
+      expect(() => service.changeStepLimit(id, 2, '5', ' ')).toThrow(/Wybierz/);
+    });
+  });
 });

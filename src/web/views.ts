@@ -199,11 +199,24 @@ function stepItem(order: Order, step: OrderStep, people: Person[]): SafeHtml {
           ${step.kind === 'daily' ? personButtons(`/zlecenia/${order.id}/kroki/${step.position}/sprawdzone`, 'Sprawdzone dziś', people, 'secondary') : ''}
           ${personButtons(`/zlecenia/${order.id}/kroki/${step.position}/zrobione`, step.kind === 'daily' ? 'Zakończone' : 'Zrobione', people, 'primary')}
           ${step.lastCheckedOn ? html`<small>ostatnio sprawdzone ${formatDate(step.lastCheckedOn)}, ${step.lastCheckedBy}</small>` : ''}
+          ${step.limitDays !== null ? limitChangeForm(order.id, step, people) : ''}
         </div>`
       : '';
   return html`<li value="${step.position}" class="step ${step.status}">
     <span class="name">${step.name}</span> ${meta}${actions}
   </li>`;
+}
+
+/** Zmiana limitu tylko w tym zleceniu, np. gdy urząd zapowiedział dłuższy termin. */
+function limitChangeForm(orderId: number, step: OrderStep, people: Person[]): SafeHtml {
+  const field = html`<label class="setting"
+    ><span>Nowy limit</span><small>dni roboczych od rozpoczęcia kroku, tylko w tym zleceniu</small
+    ><input type="number" name="limitDays" min="1" max="365" step="1" value="${step.limitDays ?? ''}"
+  /></label>`;
+  return html`<details class="limit-change">
+    <summary>Zmień limit tego kroku</summary>
+    ${personButtons(`/zlecenia/${orderId}/kroki/${step.position}/limit`, 'Zmień limit', people, 'secondary', field)}
+  </details>`;
 }
 
 function undoForm(orderId: number, people: Person[]): SafeHtml {
@@ -228,6 +241,8 @@ export function historyText(h: HistoryEntry): SafeHtml {
       return html`${h.person}: cofnięcie${step}`;
     case 'payment_call':
       return html`${h.person}: przypomnienie o zapłacie${h.note ? html` (${h.note})` : ''}`;
+    case 'limit_changed':
+      return html`${h.person}: zmiana limitu „${h.stepName}”${h.note ? html` (${h.note})` : ''}`;
   }
 }
 
@@ -360,6 +375,7 @@ button:disabled { opacity:.35; cursor:default; }
 .hints { color:var(--muted); font-size:15px; } .notice { background:var(--green); color:var(--green-ink); padding:10px 14px; border-radius:6px; } .notice.warn { background:var(--yellow); color:var(--yellow-ink); }
 .work-types li { margin:6px 0; } .work-types a { font-weight:700; color:var(--ink); } .hidden-mark { color:var(--red-ink); }
 div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.limit-change > summary { cursor:pointer; color:var(--muted); font-size:15px; margin-top:6px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history time { font-variant-numeric:tabular-nums; margin-right:6px; }
 .error { background:var(--red); color:var(--red-ink); padding:10px 14px; border-radius:6px; }
 .empty { background:#fff; padding:20px; }

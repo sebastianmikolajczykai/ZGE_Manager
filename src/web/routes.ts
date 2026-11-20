@@ -81,12 +81,16 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     }
   });
 
-  const orderAction = (path: string, act: (orderId: number, position: number, person: string) => void) =>
+  const orderAction = (
+    path: string,
+    act: (orderId: number, position: number, person: string, form: Form) => void,
+  ) =>
     app.post(path, (req, reply) => {
       const params = req.params as Form;
       const orderId = Number(params.id);
       try {
-        act(orderId, Number(params.position), (req.body as Form).person ?? '');
+        const form = req.body as Form;
+        act(orderId, Number(params.position), form.person ?? '', form);
         return reply.redirect(`/?zlecenie=${orderId}`, HTTP_SEE_OTHER);
       } catch (err) {
         return renderBoard(reply, s, orderId, message(err), HTTP_BAD_REQUEST);
@@ -94,6 +98,9 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     });
   orderAction('/zlecenia/:id/kroki/:position/zrobione', (o, p, who) => s.orders.completeStep(o, p, who));
   orderAction('/zlecenia/:id/kroki/:position/sprawdzone', (o, p, who) => s.orders.checkToday(o, p, who));
+  orderAction('/zlecenia/:id/kroki/:position/limit', (o, p, who, f) =>
+    s.orders.changeStepLimit(o, p, f.limitDays ?? '', who),
+  );
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
 
   app.get('/ustawienia', (_req, reply) => renderSettings(reply, s, null));
