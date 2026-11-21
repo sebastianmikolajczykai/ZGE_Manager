@@ -83,5 +83,8 @@ export const THEME_STYLES = `
 [data-theme="dark"] .empty, [data-theme="dark"] .form-page, [data-theme="dark"] .summary { background:var(--card); }
 [data-theme="dark"] .offer-call { background:#172554; } [data-theme="dark"] .offer-call textarea { border-color:#1e40af; }
 [data-theme="dark"] dialog#potwierdz { background:var(--card); color:var(--ink); }
+/* Ramka SMS na karcie zlecenia i zapis Ustawień (niezapisane pola, „brak zmian”). */
+[data-theme="dark"] .sms-box { background:#12301f; } [data-theme="dark"] .setting.dirty { background:#2a2010; }
+[data-theme="dark"] .saved.none { background:#374151; }
 [data-theme="dark"] dialog#potwierdz::backdrop { background:rgba(0,0,0,.7); }
 `;

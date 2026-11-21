@@ -43,3 +43,12 @@ describe('tryb jasny i ciemny', () => {
     expect(style).not.toMatch(/data-theme="dark"\][^{]*\.missing-date/);
   });
 });
+
+describe('tryb ciemny: nowe elementy z jasnym tłem', () => {
+  const page = layout('x', html``).toString();
+  const style = page.slice(page.indexOf('<style>'), page.indexOf('</style>'));
+
+  it.each(['.sms-box', '.setting.dirty', '.saved.none'])('has a dark background for %s', (selector) => {
+    expect(style).toContain(`[data-theme="dark"] ${selector} {`);
+  });
+});
