@@ -102,7 +102,7 @@ export function unpaidDetail(
   urgency: Urgency,
   history: HistoryEntry[],
   people: Person[],
-  undoableId: number | null = null,
+  undoableIds: number[] = [],
 ): SafeHtml {
   const noteField = html`<label
     >Notatka z rozmowy <small>(opcjonalnie)</small><textarea name="note"></textarea>
@@ -135,7 +135,7 @@ export function unpaidDetail(
       history,
       orderUndo(
         row.orderId,
-        undoableId,
+        undoableIds,
         people,
         html`<input type="hidden" name="widok" value="niezaplacone" />`,
       ),

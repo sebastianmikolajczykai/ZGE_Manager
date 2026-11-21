@@ -139,6 +139,30 @@ describe('Niezapłacone screens', () => {
     );
   });
 
+  it('goes back to an older entry: undoes it and all newer ones, card shows the step again', async () => {
+    const id = await handOver();
+    await post(`/niezaplacone/${id}/zaplacone`, { person: 'Anna' });
+    const card = (await get(`/?zlecenie=${id}`)).body;
+    const backTo = [...card.matchAll(/action="(\/zlecenia\/\d+\/historia\/\d+\/cofnij-do)"/g)].map((m) =>
+      String(m[1]),
+    );
+    expect(backTo.length).toBeGreaterThan(0);
+
+    // najstarszy możliwy wpis = pierwsze odhaczenie
+    const res = await post(String(backTo.at(-1)), { person: 'Piotr' });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toBe(`/?zlecenie=${id}`);
+    expect((await get('/niezaplacone')).body).toContain('Brak niezapłaconych zleceń');
+    expect((await get(`/?zlecenie=${id}`)).body).not.toContain('Zlecenie zakończone');
+  });
+
+  it('going back to an entry that cannot be reached shows a readable error', async () => {
+    const id = await handOver();
+    const res = await post(`/zlecenia/${id}/historia/999999/cofnij-do`, { person: 'Anna' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Do tego wpisu nie można cofnąć zlecenia');
+  });
+
   it('undoing an entry that is no longer the newest shows a readable error', async () => {
     const id = await handOver();
     const older = undoAction((await get(`/?zlecenie=${id}`)).body);

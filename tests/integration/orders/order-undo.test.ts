@@ -212,6 +212,156 @@ describe('OrderService: cofanie wpisu z historii', () => {
   });
 });
 
+/** Cofanie „do tego momentu”: kliknięty wpis i wszystkie nowsze naraz, tylko w tym jednym zleceniu. */
+describe('OrderService: cofanie do wybranego wpisu historii', () => {
+  let dir: string;
+  let db: AppDatabase;
+  let service: OrderService;
+  let workTypeId: number;
+
+  const newOrder = (client: string) =>
+    service.create(
+      {
+        clientName: client,
+        phone: '600 100 200',
+        town: 'Przykładowo',
+        workTypeId,
+        plot: null,
+        office: null,
+        pricePln: 2500,
+        note: null,
+        measurementOn: null,
+      },
+      PERSON,
+    );
+  const doneEntry = (orderId: number, position: number) =>
+    entryId(service.history(orderId).find((h) => h.action === 'step_done' && h.stepPosition === position));
+  const activePosition = (orderId: number) =>
+    required(service.get(orderId)).steps.find((s) => s.status === 'active')?.position;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'zge-'));
+    db = AppDatabase.open(path.join(dir, 'zge.db'));
+    db.migrate();
+    workTypeId = new WorkTypeRepository(db).create({
+      name: 'Test',
+      steps: [
+        { name: 'Krok 1', kind: 'own', limitDays: 2, provisional: false },
+        { name: 'Krok 2', kind: 'own', limitDays: 2, provisional: false },
+        { name: 'Codzienny', kind: 'daily', limitDays: null, provisional: false },
+        { name: 'Krok 4', kind: 'own', limitDays: 2, provisional: false },
+        { name: 'Zapłata', kind: 'waiting', limitDays: 14, provisional: true, payment: true },
+      ],
+    });
+    service = new OrderService(db, () => '2026-11-16');
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lists every entry that can be reached by undoing, newest first', () => {
+    const id = newOrder('Jan Przykładowy');
+    service.completeStep(id, 1, PERSON);
+    service.completeStep(id, 2, PERSON);
+    service.checkToday(id, 3, PERSON);
+    const [, step1, step2, check] = service.history(id).map((h) => h.id);
+
+    expect(service.undoableEntryIds(id)).toEqual([check, step2, step1]);
+    expect(service.undoableEntryId(id)).toBe(check);
+  });
+
+  it('listing what can be undone changes nothing in the order', () => {
+    const id = newOrder('Jan Przykładowy');
+    service.completeStep(id, 1, PERSON);
+    service.completeStep(id, 2, PERSON);
+    const before = { order: service.get(id), history: service.history(id) };
+
+    service.undoableEntryIds(id);
+
+    expect({ order: service.get(id), history: service.history(id) }).toEqual(before);
+  });
+
+  it('goes back from step 5 to step 2: the clicked entry and all newer ones are undone at once', () => {
+    const id = newOrder('Jan Przykładowy');
+    for (const position of [1, 2, 3, 4]) service.completeStep(id, position, PERSON);
+    expect(activePosition(id)).toBe(5);
+
+    const undone = service.undoBackTo(id, doneEntry(id, 2), OTHER);
+
+    expect(undone).toBe(3);
+    expect(activePosition(id)).toBe(2);
+    expect(required(service.get(id)).steps.map((s) => s.status)).toEqual([
+      'done',
+      'active',
+      'pending',
+      'pending',
+      'pending',
+    ]);
+    const history = service.history(id);
+    expect(history.filter((h) => h.action === 'step_done' && h.reverted).map((h) => h.stepPosition)).toEqual([
+      2, 3, 4,
+    ]);
+    expect(history.filter((h) => h.action === 'undone' && h.person === OTHER)).toHaveLength(3);
+  });
+
+  it('brings a paid order back to "waiting for payment"', () => {
+    const id = newOrder('Jan Przykładowy');
+    for (const position of [1, 2, 3, 4, 5]) service.completeStep(id, position, PERSON);
+    expect(required(service.get(id)).status).toBe('completed');
+
+    service.undoBackTo(id, doneEntry(id, 4), PERSON);
+
+    expect(required(service.get(id)).status).toBe('active');
+    expect(activePosition(id)).toBe(4);
+  });
+
+  it('does not touch other orders, which can still be undone later', () => {
+    const id = newOrder('Jan Przykładowy');
+    const other = newOrder('Anna Przykładowa');
+    service.completeStep(other, 1, PERSON);
+    service.completeStep(id, 1, PERSON);
+    service.completeStep(other, 2, PERSON);
+    service.completeStep(id, 2, PERSON);
+    const otherBefore = service.get(other);
+
+    service.undoBackTo(id, doneEntry(id, 1), PERSON);
+
+    expect(activePosition(id)).toBe(1);
+    expect(service.get(other)).toEqual(otherBefore);
+    expect(service.undoableEntryIds(other)).toEqual([doneEntry(other, 2), doneEntry(other, 1)]);
+  });
+
+  it('works like a normal undo for the newest entry', () => {
+    const id = newOrder('Jan Przykładowy');
+    service.completeStep(id, 1, PERSON);
+
+    expect(service.undoBackTo(id, doneEntry(id, 1), PERSON)).toBe(1);
+    expect(activePosition(id)).toBe(1);
+  });
+
+  it('refuses entries that cannot be reached and changes nothing', () => {
+    const id = newOrder('Jan Przykładowy');
+    const other = newOrder('Anna Przykładowa');
+    service.completeStep(id, 1, PERSON);
+    service.completeStep(other, 1, PERSON);
+    const created = entryId(service.history(id)[0]);
+    const before = service.history(id);
+
+    expect(() => service.undoBackTo(id, created, PERSON)).toThrow(/nie można cofnąć/i);
+    expect(() => service.undoBackTo(id, doneEntry(other, 1), PERSON)).toThrow(/nie można cofnąć/i);
+    expect(service.history(id)).toEqual(before);
+  });
+
+  it('requires a person', () => {
+    const id = newOrder('Jan Przykładowy');
+    service.completeStep(id, 1, PERSON);
+    expect(() => service.undoBackTo(id, doneEntry(id, 1), ' ')).toThrow();
+    expect(activePosition(id)).toBe(2);
+  });
+});
+
 describe('OrderService: usuwanie zlecenia przy cofnięciu przyjęcia oferty', () => {
   let dir: string;
   let db: AppDatabase;
