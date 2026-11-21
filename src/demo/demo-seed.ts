@@ -108,9 +108,39 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
     doneAgo: [29, 28, 27, 25, 23, 21, 20, 17, 13, 8, 5, 3],
     measurementAgo: 20,
   },
+  // Zapłacone (wszystkie kroki odhaczone): dochód w poprzednich miesiącach na ekranie Statystyki.
+  {
+    client: 'Henryk Wróbel (przykład)',
+    town: 'Brzesko',
+    plot: '18/6',
+    price: 2700,
+    createdAgo: 70,
+    doneAgo: [69, 68, 67, 65, 63, 61, 60, 57, 53, 47, 43, 41, 38],
+    measurementAgo: 60,
+  },
+  {
+    client: 'Jolanta Pietrzak (przykład)',
+    town: 'Okocim',
+    plot: '402',
+    price: 3400,
+    createdAgo: 55,
+    doneAgo: [54, 53, 52, 50, 48, 46, 45, 42, 38, 32, 28, 26, 22],
+    measurementAgo: 45,
+  },
+  {
+    client: 'Stanisław Michalski (przykład)',
+    town: 'Jasień',
+    plot: '77/1',
+    price: 2500,
+    createdAgo: 25,
+    doneAgo: [24, 23, 22, 21, 20, 19, 18, 16, 12, 8, 5, 3, 1],
+    measurementAgo: 18,
+  },
 ];
 
-const DEMO_PHONE = '500 000 000';
+/** Zmyślony numer, inny dla każdego przykładowego klienta (Statystyki liczą klientów po telefonie). */
+const DEMO_PHONE_FIRST = 100;
+const demoPhone = (n: number): string => `500 000 ${DEMO_PHONE_FIRST + n}`;
 const DEMO_OFFICE = 'Urząd Miejski (przykład)';
 
 /** Przykładowa oferta: wysłana `sentAgo` dni roboczych temu, opcjonalnie telefon `calledAgo` dni temu. */
@@ -156,7 +186,7 @@ export function seedDemo(db: AppDatabase, today: LocalDate): void {
     const id = orders.create(
       {
         clientName: demo.client,
-        phone: DEMO_PHONE,
+        phone: demoPhone(n),
         town: demo.town,
         workTypeId: workType.id,
         plot: demo.plot,
@@ -183,7 +213,7 @@ export function seedDemo(db: AppDatabase, today: LocalDate): void {
     const id = offers.create(
       {
         clientName: demo.client,
-        phone: DEMO_PHONE,
+        phone: demoPhone(DEMO_ORDERS.length + n),
         workTypeId: workType.id,
         sentOn: calendar.ago(demo.sentAgo),
         town: demo.town,

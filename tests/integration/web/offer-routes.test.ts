@@ -94,6 +94,30 @@ describe('offer screens', () => {
     expect(card.body).not.toContain('Rozmowa: Anna');
   });
 
+  it('"kontakt zakończony" can be undone: closed offers are listed, the card history offers "Cofnij"', async () => {
+    const id = idFrom((await createOffer()).headers.location);
+    await post(`/oferty/${id}/telefon`, { person: 'Anna', note: '', next: 'end' });
+    const list = (await app.inject({ method: 'GET', url: '/oferty' })).body;
+    expect(list).toContain('Ostatnio zamknięte');
+    expect(list).toContain(`href="/oferty?oferta=${id}"`);
+
+    const card = (await app.inject({ method: 'GET', url: `/oferty?oferta=${id}` })).body;
+    const action = /action="(\/oferty\/\d+\/historia\/\d+\/cofnij)"/.exec(card)?.[1];
+    expect(action).toBeDefined();
+    const res = await post(String(action), { person: 'Piotr' });
+    expect(res.headers.location).toBe(`/oferty?oferta=${id}`);
+    const after = (await app.inject({ method: 'GET', url: `/oferty?oferta=${id}` })).body;
+    expect(after).toContain('Piotr: cofnięcie (kontakt zakończony)');
+    expect(after).toContain('Rozmowa: Anna');
+  });
+
+  it('undoing a wrong entry shows a readable error', async () => {
+    const id = idFrom((await createOffer()).headers.location);
+    const res = await post(`/oferty/${id}/historia/999/cofnij`, { person: 'Anna' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Tego wpisu nie można cofnąć');
+  });
+
   it('rejecting with a reason closes the offer and keeps the reason in history', async () => {
     const id = idFrom((await createOffer()).headers.location);
     await post(`/oferty/${id}/odrzucona`, { person: 'Anna', reason: 'za drogo' });

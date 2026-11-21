@@ -96,3 +96,48 @@ export function progressBar(position: number, total: number): SafeHtml {
     ><small>krok ${position}/${total}</small></span
   >`;
 }
+
+/** Wpis historii, który da się pokazać na liście z cofaniem. */
+export interface HistoryItem {
+  id: number;
+  person: string;
+  happenedOn: string;
+  reverted: boolean;
+}
+
+/** Cofanie z historii: który wpis można cofnąć i dokąd wysłać formularz. */
+export interface HistoryUndo {
+  entryId: number | null;
+  action: (entryId: number) => string;
+  people: Person[];
+  /** Dodatkowe ukryte pola formularza (np. skąd wrócić). */
+  fields?: SafeHtml;
+}
+
+/**
+ * Historia „kto, co, kiedy” (najnowsze na górze). Najnowszy działający wpis klika się,
+ * żeby go cofnąć; cofnięte wpisy są przekreślone.
+ */
+export function historyList<T extends HistoryItem>(
+  entries: T[],
+  text: (entry: T) => SafeHtml,
+  undo: HistoryUndo,
+): SafeHtml {
+  const line = (h: T) => html`${avatar(h.person)}<time>${formatDate(h.happenedOn)}</time> ${text(h)}`;
+  const item = (h: T) => {
+    if (h.reverted) return html`<li class="reverted"><s>${line(h)}</s> <small>(cofnięte)</small></li>`;
+    if (h.id !== undo.entryId) return html`<li>${line(h)}</li>`;
+    return html`<li class="can-undo">
+      <details class="undo-entry">
+        <summary>
+          ${line(h)} <span class="undo-hint"><span aria-hidden="true">↶</span> cofnij</span>
+        </summary>
+        <p class="who-asks">Kto cofa? Kliknij swoje imię:</p>
+        ${personButtons(undo.action(h.id), 'Cofnij', undo.people, 'danger', undo.fields ?? null)}
+      </details>
+    </li>`;
+  };
+  return html`<ul class="history">
+    ${[...entries].reverse().map(item)}
+  </ul>`;
+}

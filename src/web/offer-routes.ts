@@ -71,6 +71,17 @@ export function registerOfferRoutes(app: FastifyInstance, s: OfferWebServices): 
     s.offers.recordCall(id, who, f.note ?? null, f.next === 'end' ? 'end' : ('again' satisfies AfterCall)),
   );
   offerAction('/oferty/:id/odrzucona', (id, who, f) => s.offers.reject(id, who, f.reason ?? null));
+  app.post('/oferty/:id/historia/:entry/cofnij', (req, reply) => {
+    const params = req.params as Form;
+    const offerId = Number(params.id);
+    try {
+      s.offers.undoEntry(offerId, Number(params.entry), (req.body as Form).person ?? '');
+      return reply.redirect(`/oferty?oferta=${offerId}`, HTTP_SEE_OTHER);
+    } catch (err) {
+      const known = s.offers.get(offerId) !== null;
+      return renderOffers(reply, s, known ? offerId : null, message(err), HTTP_BAD_REQUEST);
+    }
+  });
 }
 
 function renderOffers(
@@ -100,9 +111,15 @@ function renderOffers(
       s.offers.history(offerId),
       s.people.list(),
       s.offers.reminderDays(),
+      s.offers.undoableEntryId(offerId),
     );
   }
-  return s.pages.send(reply, TITLE, offersPage(s.offers.rows(), detail, error, offerId), status);
+  return s.pages.send(
+    reply,
+    TITLE,
+    offersPage(s.offers.rows(), detail, error, offerId, s.offers.recentlyClosed()),
+    status,
+  );
 }
 
 function toOfferInput(f: Form): OfferInput {

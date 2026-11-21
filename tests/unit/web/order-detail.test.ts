@@ -42,6 +42,8 @@ function order(steps: OrderStep[]): Order {
 
 const HISTORY: HistoryEntry[] = [
   {
+    id: 1,
+    reverted: false,
     happenedOn: '2026-11-02',
     person: 'Bartek',
     action: 'created',
@@ -50,6 +52,8 @@ const HISTORY: HistoryEntry[] = [
     note: null,
   },
   {
+    id: 2,
+    reverted: false,
     happenedOn: '2026-11-03',
     person: 'Bartek',
     action: 'step_done',

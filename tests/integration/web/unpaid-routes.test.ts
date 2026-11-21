@@ -106,6 +106,48 @@ describe('Niezapłacone screens', () => {
     expect((await get(`/?zlecenie=${id}`)).body).toContain('Zlecenie zakończone');
   });
 
+  const undoAction = (body: string) => {
+    const match = /action="(\/zlecenia\/\d+\/historia\/\d+\/cofnij)"/.exec(body);
+    expect(match, 'brak przycisku Cofnij w historii').not.toBeNull();
+    return String(match?.[1]);
+  };
+
+  it('"Zapłacone" can be undone: Niezapłacone lists recently paid orders, the card history offers "Cofnij"', async () => {
+    const id = await handOver();
+    await post(`/niezaplacone/${id}/zaplacone`, { person: 'Anna' });
+    const list = (await get('/niezaplacone')).body;
+    expect(list).toContain('Ostatnio zapłacone');
+    expect(list).toContain(`href="/?zlecenie=${id}"`);
+
+    const res = await post(undoAction((await get(`/?zlecenie=${id}`)).body), { person: 'Piotr' });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toBe(`/?zlecenie=${id}`);
+    expect((await get('/niezaplacone')).body).toContain('Karol Dłużnik');
+    expect((await get(`/?zlecenie=${id}`)).body).toContain('Piotr: cofnięcie „Zapłata” (zrobione)');
+  });
+
+  it('a reminder call can be undone from the Niezapłacone card and you stay on that card', async () => {
+    const id = await handOver();
+    await post(`/niezaplacone/${id}/rozmowa`, { person: 'Anna', note: 'pomyłka' });
+    const card = (await get(`/niezaplacone?zlecenie=${id}`)).body;
+    expect(card).toContain('name="widok" value="niezaplacone"');
+
+    const res = await post(undoAction(card), { person: 'Anna', widok: 'niezaplacone' });
+    expect(res.headers.location).toBe(`/niezaplacone?zlecenie=${id}`);
+    expect((await get(`/niezaplacone?zlecenie=${id}`)).body).toMatch(
+      /<s>[\s\S]*przypomnienie o zapłacie \(pomyłka\)/,
+    );
+  });
+
+  it('undoing an entry that is no longer the newest shows a readable error', async () => {
+    const id = await handOver();
+    const older = undoAction((await get(`/?zlecenie=${id}`)).body);
+    await post(`/niezaplacone/${id}/rozmowa`, { person: 'Anna' });
+    const res = await post(older, { person: 'Anna' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Najpierw cofnij nowsze wpisy');
+  });
+
   it('an action on an order that is not waiting for payment shows a readable error', async () => {
     const id = await createOrder();
     const res = await post(`/niezaplacone/${id}/zaplacone`, { person: 'Anna' });
