@@ -17,6 +17,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     lastPerson: 'Bartek',
     pricePln: 2500,
     owner: null,
+    measurementMissing: false,
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
   };
@@ -114,5 +115,11 @@ describe('Widok na monitor (styl D)', () => {
     expect(owned).toContain('Marcelina');
     expect(owned).not.toContain('Bartek');
     expect(tile(page, 'Klient 1 (przykład)')).toMatch(/ostatnio[\s\S]*Bartek/);
+  });
+
+  it('says clearly when the measurement date is still missing', () => {
+    const shown = monitorPage([row(8, 'green', { measurementMissing: true }), row(9, 'green')], COUNTS, 60);
+    expect(tile(shown, 'Klient 8')).toContain('Uzupełnij datę pomiaru');
+    expect(tile(shown, 'Klient 9')).not.toContain('Uzupełnij datę pomiaru');
   });
 });

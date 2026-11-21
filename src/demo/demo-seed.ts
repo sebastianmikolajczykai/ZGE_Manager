@@ -11,7 +11,7 @@ import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from '../modules/urgency/urgen
  * - createdAgo: kiedy przyjęto zlecenie,
  * - doneAgo: kiedy odhaczono kolejne kroki (od pierwszego),
  * - checkedAgo: kiedy kliknięto „Sprawdzone dziś” na aktywnym kroku „codziennie”,
- * - measurementAgo: data pomiaru w terenie (0 = dziś).
+ * - measurementAgo: data pomiaru w terenie (0 = dziś; null = termin jeszcze nieustalony).
  */
 interface DemoOrder {
   client: string;
@@ -21,7 +21,7 @@ interface DemoOrder {
   createdAgo: number;
   doneAgo: number[];
   checkedAgo?: number;
-  measurementAgo: number;
+  measurementAgo: number | null;
 }
 
 const DEMO_ORDERS: readonly DemoOrder[] = [
@@ -41,7 +41,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
     price: 3000,
     createdAgo: 1,
     doneAgo: [],
-    measurementAgo: -6,
+    measurementAgo: null, // termin pomiaru jeszcze nieustalony: tablica pokazuje „Uzupełnij datę pomiaru”
   },
   {
     client: 'Maria Wiśniewska (przykład)',
@@ -193,7 +193,7 @@ export function seedDemo(db: AppDatabase, today: LocalDate): void {
         office: DEMO_OFFICE,
         pricePln: demo.price,
         note: null,
-        measurementOn: calendar.ago(demo.measurementAgo),
+        measurementOn: demo.measurementAgo === null ? null : calendar.ago(demo.measurementAgo),
         leadPerson: person(n),
       },
       person(n),

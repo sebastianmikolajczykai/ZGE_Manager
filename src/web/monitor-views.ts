@@ -72,6 +72,7 @@ function tile(r: BoardRow): SafeHtml {
     <div class="n">${r.clientName}</div>
     <div class="tw">📍 ${r.town}${r.plot ? `, dz. ${r.plot}` : ''}</div>
     <div class="st">${r.currentStepName}</div>
+    ${r.measurementMissing ? html`<div class="nd">📅 Uzupełnij datę pomiaru</div>` : ''}
     ${progressBar(r.currentStepPosition, r.stepCount)}
     <div class="ft">
       <span>${who(r)}</span>
@@ -124,6 +125,7 @@ body { margin:0; font:18px/1.35 "Segoe UI", Inter, system-ui, sans-serif; backgr
 .lab { font-size:16px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
 .t.red .lab { color:#fca5a5; } .t.yellow .lab { color:#fcd34d; } .t.green .lab { color:#86efac; }
 .n { font-size:26px; font-weight:800; color:#fff; } .tw { color:#9ca3af; font-size:17px; } .st { font-size:20px; margin-top:6px; color:#f3f4f6; }
+.nd { display:inline-block; margin-top:8px; padding:4px 12px; border-radius:999px; background:#ffedd5; color:#9a3412; font-size:18px; font-weight:800; }
 .progress { display:flex; align-items:center; gap:8px; margin-top:4px; } .progress small { color:#9ca3af; font-size:15px; }
 .bar { display:inline-block; flex:1; height:8px; border-radius:4px; background:#374151; overflow:hidden; } .bar span { display:block; height:100%; background:#22c55e; }
 .ft { margin-top:auto; display:flex; justify-content:space-between; align-items:center; font-size:17px; color:#d1d5db; padding-top:8px; }

@@ -35,13 +35,21 @@ export interface NavCounts {
 }
 export const NO_COUNTS: NavCounts = { offersToCall: 0, unpaidToRemind: 0 };
 
-/** Kolor wybrany filtrem na Tablicy (null = wszystkie). */
-export type ColourFilter = Colour | null;
+/** Filtr „zlecenia bez daty pomiaru” (w adresie ?kolor=bez-daty, jak filtry kolorów). */
+export const NO_DATE_FILTER = 'bez-daty';
+/** Filtr Tablicy: kolor albo „bez daty pomiaru” (null = wszystkie). */
+export type BoardFilter = Colour | typeof NO_DATE_FILTER | null;
 const COLOURS: readonly Colour[] = ['red', 'yellow', 'green'];
+const FILTERS: readonly NonNullable<BoardFilter>[] = [...COLOURS, NO_DATE_FILTER];
 
-/** Odczyt filtra z adresu (?kolor=red); nieznana wartość = bez filtra. */
-export function parseColourFilter(value: string | undefined): ColourFilter {
-  return COLOURS.find((c) => c === value) ?? null;
+/** Odczyt filtra z adresu (?kolor=red, ?kolor=bez-daty); nieznana wartość = bez filtra. */
+export function parseBoardFilter(value: string | undefined): BoardFilter {
+  return FILTERS.find((f) => f === value) ?? null;
+}
+
+function matchesFilter(row: BoardRow, filter: BoardFilter): boolean {
+  if (filter === null) return true;
+  return filter === NO_DATE_FILTER ? row.measurementMissing : row.urgency.colour === filter;
 }
 
 export function layout(
@@ -114,7 +122,7 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
 
 export interface BoardOptions {
   counts: NavCounts;
-  filter: ColourFilter;
+  filter: BoardFilter;
   /** Filtr „Moje”: tylko zlecenia, w których bieżący krok należy do tej osoby (null = wszyscy). */
   person?: string | null;
   /** Osoby do wyboru w filtrze „Moje”. */
@@ -122,7 +130,7 @@ export interface BoardOptions {
 }
 
 /** Adres Tablicy z zachowaniem filtrów (kolor, osoba) i ewentualnie otwartym zleceniem. */
-function boardUrl(params: { zlecenie?: number; kolor?: ColourFilter; osoba?: string | null }): string {
+function boardUrl(params: { zlecenie?: number; kolor?: BoardFilter; osoba?: string | null }): string {
   const query = new URLSearchParams();
   if (params.zlecenie) query.set('zlecenie', String(params.zlecenie));
   if (params.kolor) query.set('kolor', params.kolor);
@@ -180,14 +188,15 @@ export function boardPage(
 }
 
 /** Filtry Tablicy: najpierw osoba („Moje”, liczą się z tego kafelki), potem kolor. */
-function filterRows(rows: BoardRow[], filter: ColourFilter, person: string | null) {
+function filterRows(rows: BoardRow[], filter: BoardFilter, person: string | null) {
   const mine = person ? rows.filter((r) => r.owner === person) : rows;
-  const shown = filter ? mine.filter((r) => r.urgency.colour === filter) : mine;
+  const shown = mine.filter((r) => matchesFilter(r, filter));
   return { mine, shown };
 }
 
 /** Napis przy pustej liście: zależy od wybranego filtra (kolor, osoba). */
-function emptyText(filter: ColourFilter, person: string | null): string {
+function emptyText(filter: BoardFilter, person: string | null): string {
+  if (filter === NO_DATE_FILTER) return 'Wszystkie zlecenia mają datę pomiaru.';
   if (filter) return 'Brak zleceń w tym kolorze.';
   if (person) return `${person} nie ma teraz żadnego kroku do zrobienia.`;
   return 'Brak aktywnych zleceń. Dodaj pierwsze przyciskiem „+ Dodaj zlecenie”.';
@@ -219,8 +228,17 @@ function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
       ><span>${TILE_LABEL[c]}</span></a
     >`;
   };
-  return html`<div class="tiles">
-    ${COLOURS.map(colourTile)}
+  const noDate = rows.filter((r) => r.measurementMissing).length;
+  const noDateTile =
+    noDate > 0
+      ? html`<a
+          class="tile no-date${options.filter === NO_DATE_FILTER ? ' on' : ''}"
+          href="${boardUrl({ kolor: NO_DATE_FILTER, osoba: options.person ?? null })}"
+          ><span class="ti" aria-hidden="true">📅</span><b>${noDate}</b><span>bez daty pomiaru</span></a
+        >`
+      : '';
+  return html`<div class="tiles${noDate > 0 ? ' six' : ''}">
+    ${COLOURS.map(colourTile)} ${noDateTile}
     <a class="tile offers" href="/oferty"
       ><span class="ti" aria-hidden="true">📞</span><b>${options.counts.offersToCall}</b
       ><span>oferty do telefonu</span></a
@@ -235,7 +253,7 @@ function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
 function boardTable(
   rows: BoardRow[],
   selectedId: number | null,
-  filter: ColourFilter,
+  filter: BoardFilter,
   person: string | null,
 ): SafeHtml {
   const link = (id: number) => boardUrl({ zlecenie: id, kolor: filter, osoba: person });
@@ -263,7 +281,7 @@ function boardTable(
             <td>${r.town}${r.plot ? html`<small>dz. ${r.plot}</small>` : ''}</td>
             <td class="step-cell">
               ${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}
-              ${r.owner ? assigneeTag(r.owner) : ''}
+              ${r.owner ? assigneeTag(r.owner) : ''} ${r.measurementMissing ? NO_DATE_LABEL : ''}
             </td>
             <td class="num">
               <b>${r.daysOnStep}</b
@@ -276,6 +294,11 @@ function boardTable(
     </tbody>
   </table>`;
 }
+
+/** Wyraźna etykieta przy zleceniu, które czeka na termin pomiaru. */
+const NO_DATE_LABEL = html`<span class="missing-date"
+  ><span aria-hidden="true">📅</span> Uzupełnij datę pomiaru</span
+>`;
 
 export function orderDetail(
   order: Order,
@@ -310,15 +333,7 @@ export function orderDetail(
       }
       <dt>Cena</dt>
       <dd>${formatPrice(order.pricePln)}</dd>
-      ${
-        order.measurementOn
-          ? html`<dt>Pomiar</dt>
-              <dd>
-                ${formatDate(order.measurementOn)}
-                ${order.status === 'active' ? calendarButton(order, workTypeName) : ''}
-              </dd>`
-          : ''
-      }
+      ${measurementFact(order, workTypeName, people)}
       <dt>Przyjęte</dt>
       <dd>${formatDate(order.receivedOn)}</dd>
       ${
@@ -340,6 +355,41 @@ function orderStatus(order: Order, urgency: Urgency | null): SafeHtml {
   if (!urgency) return html``;
   const late = urgency.daysOverdue > 0 ? ` · ${urgency.daysOverdue} dni` : '';
   return statusChip(urgency.colour, `${COLOUR_LABEL[urgency.colour]}${late}`);
+}
+
+/**
+ * Wiersz „Pomiar” na karcie: data (z przyciskiem kalendarza) albo wyraźne „Brak terminu”,
+ * plus formularz wpisania / zmiany daty, dopóki zlecenie trwa.
+ */
+function measurementFact(order: Order, workTypeName: string, people: Person[]): SafeHtml {
+  const hasMeasurementStep = order.steps.some((s) => s.kind === 'scheduled');
+  if (!order.measurementOn && !hasMeasurementStep) return html``;
+  const active = order.status === 'active';
+  const shown = order.measurementOn
+    ? html`${formatDate(order.measurementOn)} ${active ? calendarButton(order, workTypeName) : ''}`
+    : html`<span class="missing-date"
+        ><span aria-hidden="true">📅</span> Brak terminu: uzupełnij datę pomiaru</span
+      >`;
+  return html`<dt>Pomiar</dt>
+    <dd>${shown} ${active ? measurementForm(order, people) : ''}</dd>`;
+}
+
+/** Wpisanie albo zmiana daty pomiaru (trafia do historii, da się cofnąć). */
+function measurementForm(order: Order, people: Person[]): SafeHtml {
+  const field = html`<input
+    type="date"
+    class="date-input"
+    name="measurementOn"
+    aria-label="Data pomiaru"
+    required
+    value="${order.measurementOn ?? ''}"
+  />`;
+  const buttons = personButtons(`/zlecenia/${order.id}/pomiar`, 'Zapisz datę', people, 'primary', field);
+  if (!order.measurementOn) return html`<div class="measurement-form">${buttons}</div>`;
+  return html`<details class="limit-change">
+    <summary>Zmień datę pomiaru</summary>
+    ${buttons}
+  </details>`;
 }
 
 /** Przycisk „Dodaj do Kalendarza Google” z terminem pomiaru (otwiera formularz Google w nowej karcie). */
@@ -522,6 +572,7 @@ const HISTORY_WORDS: Record<HistoryEntry['action'], (step: SafeHtml, note: SafeH
   limit_changed: (step, note) => html`zmiana limitu${step}${note}`,
   lead_changed: (_step, note) => html`osoba prowadząca${note}`,
   step_assigned: (step, note) => html`osoba do kroku${step}${note}`,
+  measurement_set: (_step, note) => html`data pomiaru${note}`,
 };
 
 export function historyText(h: HistoryEntry): SafeHtml {
@@ -560,7 +611,10 @@ export function orderForm(
           )}
         </select></label
       >
-      <label>Data pomiaru <input type="date" name="measurementOn" value="${v('measurementOn')}" /></label>
+      <label
+        >Data pomiaru <small>(opcjonalnie: można uzupełnić później na karcie zlecenia)</small>
+        <input type="date" name="measurementOn" value="${v('measurementOn')}"
+      /></label>
       <label>Nr działki <small>(opcjonalnie)</small> <input name="plot" value="${v('plot')}" /></label>
       <label>Gmina / urząd <small>(opcjonalnie)</small> <input name="office" value="${v('office')}" /></label>
       <label
@@ -703,6 +757,9 @@ main { padding:18px 22px; min-width:0; }
 .tile b { font-size:26px; line-height:1; } .tile span:last-child { font-size:14px; color:var(--muted); font-weight:600; }
 .tile.red .ti { background:var(--red); color:var(--red-bar); } .tile.yellow .ti { background:var(--yellow); color:#b45309; } .tile.green .ti { background:var(--green); color:var(--brand-dark); }
 .tile.offers .ti { background:#dbeafe; } .tile.unpaid .ti { background:#f3e8ff; }
+.tiles.six { grid-template-columns:repeat(6,minmax(0,1fr)); } .tile.no-date .ti { background:#ffedd5; }
+.missing-date { display:inline-flex; align-items:center; gap:5px; margin-top:4px; padding:3px 10px; border-radius:999px; background:#ffedd5; color:#9a3412; border:1px solid #fdba74; font-weight:700; font-size:14px; }
+.measurement-form { margin-top:8px; } .date-input { font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; margin-bottom:8px; }
 .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
 .toolbar input[type=search] { flex:1; max-width:420px; font:inherit; padding:9px 14px; border-radius:10px; border:1px solid #d1d5db; background:#fff; }
 .filter { padding:7px 14px; border-radius:999px; background:var(--ink); color:#fff; text-decoration:none; font-weight:600; font-size:15px; }
@@ -849,7 +906,7 @@ dialog#potwierdz::backdrop { background:rgba(15,61,36,.55); }
 .months td.income { min-width:260px; } .income-bar { display:inline-block; vertical-align:middle; width:150px; height:12px; border-radius:6px; background:var(--line); overflow:hidden; margin-right:10px; }
 .income-bar span { display:block; height:100%; background:linear-gradient(90deg,#4ade80,var(--brand)); border-radius:6px; }
 .how { margin:20px 0; color:var(--muted); } .how summary { cursor:pointer; font-weight:600; color:var(--ink); }
-@media (max-width:1280px) { .tiles { grid-template-columns:repeat(3,minmax(0,1fr)); } .stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:1280px) { .tiles, .tiles.six { grid-template-columns:repeat(3,minmax(0,1fr)); } .stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:1100px) { .split { grid-template-columns:1fr; } .detail { position:static; } }
 `;
 

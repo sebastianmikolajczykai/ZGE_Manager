@@ -2,7 +2,7 @@ import type { AppDatabase } from '../../db.js';
 import type { LocalDate } from '../urgency/day-counter.js';
 import type { StepKind } from '../work-types/work-type-definition.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
-import { parseOrderInput, type OrderInput } from './order-input.js';
+import { parseMeasurementDate, parseOrderInput, type OrderInput } from './order-input.js';
 import { optional, requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
@@ -14,7 +14,8 @@ export type HistoryAction =
   | 'payment_call'
   | 'limit_changed'
   | 'lead_changed'
-  | 'step_assigned';
+  | 'step_assigned'
+  | 'measurement_set';
 
 export interface OrderStep {
   position: number;
@@ -80,6 +81,7 @@ const UNDO_LABEL: Record<UndoableAction, string> = {
   limit_changed: 'zmiana limitu',
   lead_changed: 'osoba prowadząca',
   step_assigned: 'osoba do kroku',
+  measurement_set: 'data pomiaru',
 };
 
 /** Poprzednia osoba (prowadząca albo kroku), żeby dało się ją przywrócić. */
@@ -97,6 +99,10 @@ interface LimitUndoData {
   limitDays: number | null;
   provisional: boolean;
 }
+interface MeasurementUndoData {
+  measurementOn: LocalDate | null;
+}
+type UndoData = CheckUndoData | LimitUndoData | MeasurementUndoData | PersonUndoData;
 
 const GROSZE_PER_PLN = 100;
 
@@ -118,11 +124,7 @@ export class OrderService {
     const workType = this.workTypes.findById(input.workTypeId);
     if (!workType) throw new Error(`Nieznany rodzaj pracy (numer ${input.workTypeId})`);
     const today = this.today();
-    this.validateMeasurement(
-      input,
-      workType.steps.some((s) => s.kind === 'scheduled'),
-      today,
-    );
+    if (input.measurementOn !== null) validateNotPast(input.measurementOn, today);
 
     return this.inTransaction(() => {
       const id = Number(
@@ -223,6 +225,23 @@ export class OrderService {
     });
   }
 
+  /** Wpisuje albo zmienia datę pomiaru (np. gdy urząd potwierdził termin); zmiana trafia do historii i da się ją cofnąć. */
+  setMeasurementDate(orderId: number, dateText: string, person: string): void {
+    const who = requirePerson(person);
+    const order = this.require(orderId);
+    if (order.status !== 'active') throw new Error(`Zlecenie nr ${orderId} jest zakończone`);
+    if (dateText.trim() === '') throw new Error('Podaj datę pomiaru');
+    const date = parseMeasurementDate(dateText.trim()) as LocalDate;
+    validateNotPast(date, this.today());
+    if (date === order.measurementOn) throw new Error('To ta sama data pomiaru, nic się nie zmienia');
+    this.inTransaction(() => {
+      this.db.connection.prepare('UPDATE orders SET measurement_on = ? WHERE id = ?').run(date, orderId);
+      const before: MeasurementUndoData = { measurementOn: order.measurementOn };
+      const note = `${dateOrNone(order.measurementOn)} → ${dateOrNone(date)}`;
+      this.log(orderId, who, 'measurement_set', null, note, before);
+    });
+  }
+
   /**
    * Ustawia prowadzącego i osoby kroków (także z góry, dla przyszłych kroków).
    * Zrobionych kroków nie zmienia; do historii trafia tylko to, co się zmieniło.
@@ -308,10 +327,19 @@ export class OrderService {
     });
   }
 
-  /** Przywraca stan zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit / osoba). */
+  /** Przywraca stan zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit / osoba / data pomiaru). */
   private restore(orderId: number, entry: HistoryRow): void {
-    const data = JSON.parse(entry.undo_data ?? '{}') as CheckUndoData & LimitUndoData & PersonUndoData;
+    const data = JSON.parse(entry.undo_data ?? '{}') as CheckUndoData &
+      LimitUndoData &
+      PersonUndoData &
+      MeasurementUndoData;
     const position = entry.step_position;
+    if (entry.action === 'measurement_set') {
+      this.db.connection
+        .prepare('UPDATE orders SET measurement_on = ? WHERE id = ?')
+        .run(data.measurementOn ?? null, orderId);
+      return;
+    }
     if (entry.action === 'lead_changed') {
       this.db.connection.prepare('UPDATE orders SET lead_person = ? WHERE id = ?').run(data.person, orderId);
       return;
@@ -411,16 +439,6 @@ export class OrderService {
       .all(orderId) as HistoryRow[];
   }
 
-  private validateMeasurement(input: OrderInput, needsMeasurement: boolean, today: LocalDate): void {
-    if (needsMeasurement && input.measurementOn === null) {
-      throw new Error('Podaj datę pomiaru w terenie');
-    }
-    // Daty RRRR-MM-DD (sprawdzone w parseOrderInput) porównują się poprawnie jako tekst.
-    if (input.measurementOn !== null && input.measurementOn < today) {
-      throw new Error(`Data pomiaru ${input.measurementOn} jest w przeszłości`);
-    }
-  }
-
   private require(orderId: number): Order {
     const order = this.get(orderId);
     if (!order) throw new Error(`Nie ma zlecenia o numerze ${orderId}`);
@@ -439,7 +457,7 @@ export class OrderService {
     action: HistoryAction,
     step: OrderStep | null,
     note: string | null = null,
-    undoData: CheckUndoData | LimitUndoData | PersonUndoData | null = null,
+    undoData: UndoData | null = null,
   ): void {
     this.db.connection
       .prepare(
@@ -534,6 +552,7 @@ function isUndoable(action: HistoryAction): action is UndoableAction {
 
 /** Czy wpis wciąż działa i da się go bezpiecznie cofnąć (stare wpisy bez zapisanego stanu: tylko „zrobione”). */
 function canRevert(order: Order, entry: HistoryRow): boolean {
+  if (entry.action === 'measurement_set') return order.status === 'active' && entry.undo_data !== null;
   if (entry.action === 'lead_changed') return entry.undo_data !== null;
   const step = order.steps.find((s) => s.position === entry.step_position);
   if (!step) return false;
@@ -549,7 +568,7 @@ function canRevert(order: Order, entry: HistoryRow): boolean {
 /** Opis cofnięcia w historii; przy limicie i osobach z tym, co było zmienione (np. „Anna → Piotr”). */
 function undoNote(entry: HistoryRow): string {
   const label = UNDO_LABEL[entry.action as UndoableAction];
-  if (entry.action === 'limit_changed') return `${label} ${entry.note}`;
+  if (entry.action === 'limit_changed' || entry.action === 'measurement_set') return `${label} ${entry.note}`;
   if (entry.action === 'lead_changed' || entry.action === 'step_assigned') return `${label}: ${entry.note}`;
   return label;
 }
@@ -576,6 +595,19 @@ function toOrder(r: OrderRow, steps: OrderStep[]): Order {
     leadPerson: r.lead_person,
     steps,
   };
+}
+
+/** Data pomiaru nie może być w przeszłości (dziś wolno). */
+function validateNotPast(date: LocalDate, today: LocalDate): void {
+  // Daty RRRR-MM-DD (sprawdzone wcześniej) porównują się poprawnie jako tekst.
+  if (date < today) throw new Error(`Data pomiaru ${date} jest w przeszłości`);
+}
+
+/** Data do historii: DD.MM.RRRR albo „brak”. */
+function dateOrNone(date: LocalDate | null): string {
+  if (date === null) return 'brak';
+  const [y, m, d] = date.split('-');
+  return `${d}.${m}.${y}`;
 }
 
 const MAX_STEP_LIMIT_DAYS = 365;

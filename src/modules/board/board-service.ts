@@ -3,6 +3,7 @@ import type { LocalDate } from '../urgency/day-counter.js';
 import { UrgencyRules, type Urgency } from '../urgency/urgency-rules.js';
 import { currentOwner, type Order, type OrderService, type OrderStep } from '../orders/order-service.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
+import { isWaitingForMeasurementDate } from '../orders/measurement.js';
 
 /** Jeden wiersz tablicy „Na dziś”. */
 export interface BoardRow {
@@ -17,6 +18,8 @@ export interface BoardRow {
   daysOnStep: number;
   lastPerson: string | null;
   pricePln: number | null;
+  /** Zlecenie czeka na termin pomiaru (data do uzupełnienia). */
+  measurementMissing: boolean;
   /** Do kogo należy bieżący krok (filtr „Moje”); null = nikt nie przypisany. */
   owner: string | null;
   urgency: Urgency;
@@ -52,7 +55,12 @@ export class BoardService {
       case 'daily':
         return this.rules.evaluateDaily(maxDate(startedOn, step.lastCheckedOn), today);
       case 'scheduled':
-        return this.rules.evaluateScheduled(order.measurementOn ?? startedOn, today);
+        if (order.measurementOn !== null) return this.rules.evaluateScheduled(order.measurementOn, today);
+        // Bez daty pomiaru: trzeba ustalić termin, więc liczymy jak krok „robimy my” (progi bezczynności).
+        return this.rules.evaluate(
+          { kind: 'own', limitDays: null, startedOn, lastActivityOn: startedOn },
+          today,
+        );
       default:
         return this.rules.evaluate(
           { kind: step.kind, limitDays: step.limitDays, startedOn, lastActivityOn: startedOn },
@@ -77,6 +85,7 @@ export class BoardService {
       daysOnStep: this.rules.daysBetween(step.startedOn ?? order.receivedOn, today),
       lastPerson: this.lastPerson(order.id),
       pricePln: order.pricePln,
+      measurementMissing: isWaitingForMeasurementDate(order),
       owner: currentOwner(order),
       urgency,
     };

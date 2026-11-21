@@ -204,6 +204,59 @@ describe('karta zlecenia: styl C', () => {
   });
 });
 
+describe('karta zlecenia: data pomiaru do uzupełnienia', () => {
+  const measured = (measurementOn: string | null, status: Order['status'] = 'active') => {
+    const pomiar = {
+      ...step(2, 'pending'),
+      kind: 'scheduled' as const,
+      limitDays: null,
+      name: 'Pomiar w terenie',
+    };
+    return orderDetail(
+      { ...order([step(1, 'active'), pomiar]), measurementOn, status },
+      'Podział',
+      null,
+      HISTORY,
+      PEOPLE,
+    ).value;
+  };
+
+  it('says the date is missing and offers a form to fill it in', () => {
+    const page = measured(null);
+    expect(page).toContain('Brak terminu: uzupełnij datę pomiaru');
+    expect(page).toContain('action="/zlecenia/7/pomiar"');
+    expect(page).toMatch(/<input[^>]*type="date"[^>]*name="measurementOn"/);
+    expect(page).toContain('Zapisz datę: Bartek');
+  });
+
+  it('lets the date be changed later, prefilled with the current one', () => {
+    const page = measured('2026-11-30');
+    expect(page).not.toContain('Brak terminu');
+    expect(page).toContain('Zmień datę pomiaru');
+    expect(page).toMatch(/name="measurementOn"[^>]*value="2026-11-30"/);
+  });
+
+  it('has no date form for a finished order or work without a measurement step', () => {
+    expect(measured('2026-11-30', 'completed')).not.toContain('/zlecenia/7/pomiar');
+    expect(render([step(1, 'active')])).not.toContain('/zlecenia/7/pomiar');
+  });
+
+  it('describes setting the date in the history', () => {
+    const entry: HistoryEntry = {
+      id: 9,
+      reverted: false,
+      happenedOn: '2026-11-04',
+      person: 'Bartek',
+      action: 'measurement_set',
+      stepPosition: null,
+      stepName: null,
+      note: 'brak → 25.11.2026',
+    };
+    const page = orderDetail(order([step(1, 'active')]), 'Podział', null, [entry], PEOPLE).value;
+    expect(page).toContain('Bartek: data pomiaru (brak → 25.11.2026)');
+  });
+});
+
 describe('karta zlecenia: osoba prowadząca i osoby kroków', () => {
   const PEOPLE2 = [
     { id: 1, name: 'Bartek' },
