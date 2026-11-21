@@ -881,6 +881,10 @@ td .assignee { display:flex; margin:4px 0 0; }
 .work-types li { margin:6px 0; } .work-types a { font-weight:700; color:var(--ink); } .hidden-mark { color:var(--red-ink); }
 div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .limit-change > summary { cursor:pointer; color:var(--muted); font-size:15px; margin-top:8px; }
+/* Zmiana limitu w karcie zlecenia: karta jest wąska, więc opis na górze, a − / pole / + w osobnym wierszu pod nim. */
+.limit-change form.people > label.setting { grid-template-columns:minmax(0,1fr); }
+.limit-change .setting small, .limit-change .setting .stepper { grid-column:1; grid-row:auto; }
+.limit-change .setting .stepper { max-width:240px; margin-top:6px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history li { display:flex; gap:8px; align-items:center; margin:3px 0; }
 .history time { font-variant-numeric:tabular-nums; white-space:nowrap; } .history li { align-items:flex-start; } .history .av { flex:none; }
 .history li.reverted { opacity:.6; } .history li.reverted s { display:flex; gap:8px; align-items:flex-start; }
