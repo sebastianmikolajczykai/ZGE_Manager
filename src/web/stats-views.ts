@@ -122,7 +122,11 @@ function howWeCount(paidWithoutPrice: number): SafeHtml {
   return html`<details class="how">
     <summary>Jak liczymy?</summary>
     <ul>
-      <li><b>Klient</b> to numer telefonu: kilka zleceń z tym samym numerem = jeden klient.</li>
+      <li>
+        <b>Klient</b> to imię i nazwisko: kilka zleceń z tym samym imieniem i nazwiskiem = jeden klient
+        (wielkość liter i spacje nie mają znaczenia). Dwie różne osoby o tym samym imieniu i nazwisku liczą
+        się jako jeden klient.
+      </li>
       <li><b>Nowy klient</b> liczy się w miesiącu jego pierwszego zlecenia.</li>
       <li>
         <b>Dochód</b> to suma cen zleceń oznaczonych „Zapłacone”, w miesiącu kliknięcia „Zapłacone” (kwoty
