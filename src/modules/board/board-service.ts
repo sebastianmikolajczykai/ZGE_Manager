@@ -1,7 +1,7 @@
 import type { AppDatabase } from '../../db.js';
 import type { LocalDate } from '../urgency/day-counter.js';
 import { UrgencyRules, type Urgency } from '../urgency/urgency-rules.js';
-import type { Order, OrderService, OrderStep } from '../orders/order-service.js';
+import { currentOwner, type Order, type OrderService, type OrderStep } from '../orders/order-service.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
 
 /** Jeden wiersz tablicy „Na dziś”. */
@@ -17,6 +17,8 @@ export interface BoardRow {
   daysOnStep: number;
   lastPerson: string | null;
   pricePln: number | null;
+  /** Do kogo należy bieżący krok (filtr „Moje”); null = nikt nie przypisany. */
+  owner: string | null;
   urgency: Urgency;
 }
 
@@ -75,6 +77,7 @@ export class BoardService {
       daysOnStep: this.rules.daysBetween(step.startedOn ?? order.receivedOn, today),
       lastPerson: this.lastPerson(order.id),
       pricePln: order.pricePln,
+      owner: currentOwner(order),
       urgency,
     };
     return { row, sortKey: { urgency, waitingSince: order.receivedOn } };

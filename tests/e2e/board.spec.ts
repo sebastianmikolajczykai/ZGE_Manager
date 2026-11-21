@@ -16,7 +16,7 @@ test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie,
 
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   await expect(panel.getByRole('heading', { name: client })).toBeVisible();
-  await expect(panel.getByText('Ustalenie terminu pomiaru w terenie')).toBeVisible();
+  await expect(panel.getByText('Ustalenie terminu pomiaru w terenie', { exact: true })).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toBeVisible();
 
   // Historia jest zwinięta; po rozwinięciu przeglądarka pamięta to także po przeładowaniu strony.
@@ -96,7 +96,7 @@ test('kroki do zrobienia można zwinąć i rozwinąć', async ({ page }) => {
   await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
 
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
-  await expect(panel.getByText('Analiza materiałów w urzędzie')).toBeHidden();
+  await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeHidden();
   await panel.getByText(/^Do zrobienia \(\d+\)$/).click();
-  await expect(panel.getByText('Analiza materiałów w urzędzie')).toBeVisible();
+  await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeVisible();
 });

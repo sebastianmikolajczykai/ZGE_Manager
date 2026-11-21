@@ -44,6 +44,51 @@ describe('web routes', () => {
       }).toString(),
     });
 
+  describe('osoby w zleceniu i filtr „Moje”', () => {
+    const post = (url: string, fields: Record<string, string>) =>
+      app.inject({ method: 'POST', url, headers: FORM, payload: new URLSearchParams(fields).toString() });
+
+    it('a new order can get a lead person; ?osoba= shows only that person’s orders', async () => {
+      await createOrder({ clientName: 'Klient Anny', leadPerson: 'Anna' });
+      await createOrder({ clientName: 'Klient bez osoby' });
+      const mine = (await app.inject({ method: 'GET', url: '/?osoba=Anna' })).body;
+      expect(mine).toContain('Klient Anny');
+      expect(mine).not.toContain('Klient bez osoby');
+      const all = (await app.inject({ method: 'GET', url: '/' })).body;
+      expect(all).toContain('Klient bez osoby');
+      expect(all).toContain('id="osoba"');
+    });
+
+    it('people can be planned on the card; the board follows the current step', async () => {
+      const res = await createOrder({ clientName: 'Plan', leadPerson: 'Anna' });
+      const id = /zlecenie=(\d+)/.exec(res.headers.location as string)?.[1];
+      const saved = await post(`/zlecenia/${id}/osoby`, {
+        leadPerson: 'Anna',
+        step_1: 'Piotr',
+        person: 'Anna',
+      });
+      expect(saved.statusCode).toBe(303);
+      expect(saved.headers.location).toBe(`/?zlecenie=${id}`);
+      expect((await app.inject({ method: 'GET', url: '/?osoba=Piotr' })).body).toContain('Plan');
+      expect((await app.inject({ method: 'GET', url: '/?osoba=Anna' })).body).not.toContain('>Plan<');
+      const card = (await app.inject({ method: 'GET', url: `/?zlecenie=${id}` })).body;
+      expect(card).toContain('Anna: osoba do kroku „Ustalenie terminu pomiaru w terenie” (brak → Piotr)');
+    });
+
+    it('saving people without choosing who saves shows a readable error', async () => {
+      const res = await createOrder();
+      const id = /zlecenie=(\d+)/.exec(res.headers.location as string)?.[1];
+      const bad = await post(`/zlecenia/${id}/osoby`, { leadPerson: 'Anna' });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.body).toContain('Wybierz');
+    });
+
+    it('the new order form offers the lead person (optional)', async () => {
+      const form = (await app.inject({ method: 'GET', url: '/zlecenia/nowe' })).body;
+      expect(form).toMatch(/<select name="leadPerson">\s*<option value="">— nikt —/);
+    });
+  });
+
   it('board page lists the work type template and the people buttons', async () => {
     const res = await app.inject({ method: 'GET', url: '/zlecenia/nowe' });
     expect(res.statusCode).toBe(200);

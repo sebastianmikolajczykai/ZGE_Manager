@@ -15,6 +15,11 @@ cp .env.example .env   # opcjonalnie: DB_PATH, PORT
 npm start
 ```
 
+## Przydatne ekrany
+
+- **Widok na monitor**: `http://localhost:3000/monitor` (link „📺 Widok na monitor” w menu). Duże kafle do powieszenia na telewizorze, odświeża się sam.
+- **Filtr „Moje”**: na Tablicy wybierz osobę z listy. Ta przeglądarka zapamięta wybór i pokaże przycisk „👤 Moje”. Zlecenie jest „czyje” według osoby przypisanej do bieżącego kroku, a gdy jej nie ma, według osoby prowadzącej (karta zlecenia → „Osoby w zleceniu”).
+
 ## Testy (piramida)
 
 | Poziom     | Polecenie                  | Co sprawdza                                                  |

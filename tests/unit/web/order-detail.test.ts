@@ -18,6 +18,7 @@ function step(position: number, status: OrderStep['status']): OrderStep {
     doneBy: status === 'done' ? 'Bartek' : null,
     lastCheckedOn: null,
     lastCheckedBy: null,
+    assignee: null,
   };
 }
 
@@ -36,6 +37,7 @@ function order(steps: OrderStep[]): Order {
     receivedOn: '2026-11-02',
     status: 'active',
     completedOn: null,
+    leadPerson: null,
     steps,
   };
 }
@@ -199,5 +201,79 @@ describe('karta zlecenia: styl C', () => {
   it('shows the person colour next to each history entry', () => {
     const history = fold(render([step(1, 'done'), step(2, 'active')]), 'history');
     expect(history).toMatch(/class="av"[^>]*>B</);
+  });
+});
+
+describe('karta zlecenia: osoba prowadząca i osoby kroków', () => {
+  const PEOPLE2 = [
+    { id: 1, name: 'Bartek' },
+    { id: 2, name: 'Marcelina' },
+  ];
+  const withPeople = (lead: string | null, steps: OrderStep[]) =>
+    orderDetail({ ...order(steps), leadPerson: lead }, 'Podział', null, HISTORY, PEOPLE2).value;
+  const assignForm = (page: string) =>
+    page.slice(
+      page.indexOf('action="/zlecenia/7/osoby"'),
+      page.indexOf('</form>', page.indexOf('action="/zlecenia/7/osoby"')),
+    );
+
+  it('shows who leads the order, or that nobody does yet', () => {
+    expect(withPeople('Marcelina', [step(1, 'active')])).toMatch(/<dt>Prowadzi<\/dt>\s*<dd>[\s\S]*Marcelina/);
+    expect(withPeople(null, [step(1, 'active')])).toMatch(/<dt>Prowadzi<\/dt>\s*<dd>[\s\S]*nikt/);
+  });
+
+  it('shows the person assigned to a step next to it', () => {
+    const page = withPeople('Bartek', [step(1, 'active'), { ...step(2, 'pending'), assignee: 'Marcelina' }]);
+    const second = page.slice(page.indexOf('<li value="2"'));
+    expect(second).toMatch(/class="assignee"[\s\S]*Marcelina/);
+  });
+
+  it('one form sets the lead person and plans people for all steps not done yet', () => {
+    const page = withPeople('Bartek', [
+      step(1, 'done'),
+      step(2, 'active'),
+      { ...step(3, 'pending'), assignee: 'Marcelina' },
+    ]);
+    const form = assignForm(page);
+    expect(page).toContain('Osoby w zleceniu');
+    expect(form).toMatch(/<select name="leadPerson"[\s\S]*<option value="Bartek" selected>/);
+    expect(form).not.toContain('name="step_1"');
+    expect(form).toContain('name="step_2"');
+    expect(form).toMatch(/name="step_3"[\s\S]*<option value="Marcelina" selected>/);
+    expect(form).toContain('prowadzący');
+    expect(form).toContain('Zapisz osoby: Marcelina');
+  });
+
+  it('keeps a person removed from Ustawienia visible in the form, so saving does not drop them', () => {
+    const form = assignForm(withPeople('Zofia', [step(1, 'active')]));
+    expect(form).toMatch(/<option value="Zofia" selected>/);
+  });
+
+  it('describes changes of people in the history', () => {
+    const entries: HistoryEntry[] = [
+      {
+        id: 3,
+        reverted: false,
+        happenedOn: '2026-11-04',
+        person: 'Bartek',
+        action: 'lead_changed',
+        stepPosition: null,
+        stepName: null,
+        note: 'brak → Marcelina',
+      },
+      {
+        id: 4,
+        reverted: false,
+        happenedOn: '2026-11-04',
+        person: 'Bartek',
+        action: 'step_assigned',
+        stepPosition: 2,
+        stepName: 'Krok 2',
+        note: 'brak → Bartek',
+      },
+    ];
+    const page = orderDetail(order([step(1, 'active')]), 'Podział', null, entries, PEOPLE).value;
+    expect(page).toContain('Bartek: osoba prowadząca (brak → Marcelina)');
+    expect(page).toContain('Bartek: osoba do kroku „Krok 2” (brak → Bartek)');
   });
 });

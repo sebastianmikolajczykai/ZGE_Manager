@@ -13,6 +13,8 @@ export interface OrderInput {
   note: string | null;
   /** Data pomiaru w terenie (wymagana, gdy rodzaj pracy ma krok „w ustalonym dniu”). */
   measurementOn: LocalDate | null;
+  /** Osoba prowadząca zlecenie (opcjonalnie); do niej należą kroki bez przypisanej osoby. */
+  leadPerson?: string | null;
 }
 
 const dateChecker = new DayCounter('calendar');
@@ -29,6 +31,7 @@ export function parseOrderInput(raw: OrderInput): OrderInput {
     pricePln: parsePrice(raw.pricePln),
     note: optional(raw.note),
     measurementOn: parseDate(raw.measurementOn),
+    leadPerson: optional(raw.leadPerson ?? null),
   };
 }
 

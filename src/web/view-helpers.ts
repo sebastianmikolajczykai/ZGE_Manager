@@ -97,6 +97,19 @@ export function progressBar(position: number, total: number): SafeHtml {
   >`;
 }
 
+/**
+ * Przyciski − / + przy polu liczbowym (zmiana o 1 jednym kliknięciem). Nie wysyłają formularza:
+ * zmieniają tylko liczbę w polu (skrypt w layout, po atrybucie data-step), zapis dalej przyciskiem „Zapisz”.
+ */
+export function numberStepper(label: string, input: SafeHtml): SafeHtml {
+  // Pole jest pierwsze w kodzie (etykieta <label> wskazuje pierwsze pole w środku); „−” stoi po lewej dzięki CSS (order).
+  return html`<span class="stepper"
+    >${input}<button type="button" class="step-btn minus" data-step="-1" aria-label="Zmniejsz: ${label}">
+      −</button
+    ><button type="button" class="step-btn" data-step="1" aria-label="Zwiększ: ${label}">+</button></span
+  >`;
+}
+
 /** Wpis historii, który da się pokazać na liście z cofaniem. */
 export interface HistoryItem {
   id: number;

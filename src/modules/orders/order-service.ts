@@ -6,7 +6,15 @@ import { parseOrderInput, type OrderInput } from './order-input.js';
 import { optional, requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
-export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone' | 'payment_call' | 'limit_changed';
+export type HistoryAction =
+  | 'created'
+  | 'step_done'
+  | 'checked'
+  | 'undone'
+  | 'payment_call'
+  | 'limit_changed'
+  | 'lead_changed'
+  | 'step_assigned';
 
 export interface OrderStep {
   position: number;
@@ -22,6 +30,8 @@ export interface OrderStep {
   doneBy: string | null;
   lastCheckedOn: LocalDate | null;
   lastCheckedBy: string | null;
+  /** Osoba przypisana do kroku; null = krok należy do osoby prowadzącej zlecenie. */
+  assignee: string | null;
 }
 
 export interface Order extends Omit<OrderInput, 'workTypeId'> {
@@ -30,7 +40,22 @@ export interface Order extends Omit<OrderInput, 'workTypeId'> {
   receivedOn: LocalDate;
   status: 'active' | 'completed';
   completedOn: LocalDate | null;
+  leadPerson: string | null;
   steps: OrderStep[];
+}
+
+/** Przypisanie osób: prowadzący zlecenie i osoby kroków (numer kroku → imię; pusty tekst = nikt). */
+export interface PeopleAssignment {
+  leadPerson: string;
+  steps: Record<number, string>;
+}
+
+const NOBODY = 'brak';
+
+/** Do kogo należy bieżący krok: osoba przypisana do kroku, a gdy jej nie ma, prowadzący zlecenie. */
+export function currentOwner(order: Order): string | null {
+  const active = order.steps.find((st) => st.status === 'active');
+  return active?.assignee ?? order.leadPerson;
 }
 
 export interface HistoryEntry {
@@ -53,7 +78,14 @@ const UNDO_LABEL: Record<UndoableAction, string> = {
   checked: 'sprawdzone dziś',
   payment_call: 'przypomnienie o zapłacie',
   limit_changed: 'zmiana limitu',
+  lead_changed: 'osoba prowadząca',
+  step_assigned: 'osoba do kroku',
 };
+
+/** Poprzednia osoba (prowadząca albo kroku), żeby dało się ją przywrócić. */
+interface PersonUndoData {
+  person: string | null;
+}
 type UndoableAction = Exclude<HistoryAction, 'created' | 'undone'>;
 
 /** Poprzedni stan kroku zapisany przy wpisie, żeby dało się go przywrócić. */
@@ -96,8 +128,8 @@ export class OrderService {
       const id = Number(
         this.db.connection
           .prepare(
-            `INSERT INTO orders (client_name, phone, town, work_type_id, plot, office, price_grosze, note, measurement_on, received_on)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO orders (client_name, phone, town, work_type_id, plot, office, price_grosze, note, measurement_on, received_on, lead_person)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.clientName,
@@ -110,6 +142,7 @@ export class OrderService {
             input.note,
             input.measurementOn,
             today,
+            input.leadPerson ?? null,
           ).lastInsertRowid,
       );
       const insertStep = this.db.connection.prepare(
@@ -190,6 +223,36 @@ export class OrderService {
     });
   }
 
+  /**
+   * Ustawia prowadzącego i osoby kroków (także z góry, dla przyszłych kroków).
+   * Zrobionych kroków nie zmienia; do historii trafia tylko to, co się zmieniło.
+   */
+  assignPeople(orderId: number, assignment: PeopleAssignment, person: string): void {
+    const who = requirePerson(person);
+    const order = this.require(orderId);
+    const lead = optional(assignment.leadPerson);
+    this.inTransaction(() => {
+      if (lead !== order.leadPerson) {
+        this.db.connection.prepare('UPDATE orders SET lead_person = ? WHERE id = ?').run(lead, orderId);
+        this.log(orderId, who, 'lead_changed', null, change(order.leadPerson, lead), {
+          person: order.leadPerson,
+        });
+      }
+      for (const step of order.steps) {
+        const wanted = assignment.steps[step.position];
+        if (step.status === 'done' || wanted === undefined) continue;
+        const assignee = optional(wanted);
+        if (assignee === step.assignee) continue;
+        this.db.connection
+          .prepare('UPDATE order_steps SET assignee = ? WHERE order_id = ? AND position = ?')
+          .run(assignee, orderId, step.position);
+        this.log(orderId, who, 'step_assigned', step, change(step.assignee, assignee), {
+          person: step.assignee,
+        });
+      }
+    });
+  }
+
   checkToday(orderId: number, position: number, person: string): void {
     const who = requirePerson(person);
     const step = this.requireActiveStep(orderId, position);
@@ -236,25 +299,29 @@ export class OrderService {
     if (this.undoableEntryId(orderId) !== entryId) {
       throw new Error('Najpierw cofnij nowsze wpisy w historii (cofamy po kolei, od najnowszego)');
     }
-    const step = order.steps.find((s) => s.position === entry.step_position) as OrderStep;
+    const step = order.steps.find((s) => s.position === entry.step_position) ?? null;
     this.inTransaction(() => {
-      if (entry.action === 'step_done') return this.revertStepDone(orderId, step, who);
-      this.restoreStep(orderId, step.position, entry);
+      if (entry.action === 'step_done') return this.revertStepDone(orderId, step as OrderStep, who);
+      this.restore(orderId, entry);
       this.db.connection.prepare('UPDATE order_history SET reverted = 1 WHERE id = ?').run(entryId);
-      const label = UNDO_LABEL[entry.action as UndoableAction];
-      this.log(
-        orderId,
-        who,
-        'undone',
-        step,
-        entry.action === 'limit_changed' ? `${label} ${entry.note}` : label,
-      );
+      this.log(orderId, who, 'undone', step, undoNote(entry));
     });
   }
 
-  /** Przywraca stan kroku zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit). */
-  private restoreStep(orderId: number, position: number, entry: HistoryRow): void {
-    const data = JSON.parse(entry.undo_data ?? '{}') as CheckUndoData & LimitUndoData;
+  /** Przywraca stan zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit / osoba). */
+  private restore(orderId: number, entry: HistoryRow): void {
+    const data = JSON.parse(entry.undo_data ?? '{}') as CheckUndoData & LimitUndoData & PersonUndoData;
+    const position = entry.step_position;
+    if (entry.action === 'lead_changed') {
+      this.db.connection.prepare('UPDATE orders SET lead_person = ? WHERE id = ?').run(data.person, orderId);
+      return;
+    }
+    if (entry.action === 'step_assigned') {
+      this.db.connection
+        .prepare('UPDATE order_steps SET assignee = ? WHERE order_id = ? AND position = ?')
+        .run(data.person, orderId, position);
+      return;
+    }
     if (entry.action === 'limit_changed') {
       this.db.connection
         .prepare('UPDATE order_steps SET limit_days = ?, provisional = ? WHERE order_id = ? AND position = ?')
@@ -372,7 +439,7 @@ export class OrderService {
     action: HistoryAction,
     step: OrderStep | null,
     note: string | null = null,
-    undoData: CheckUndoData | LimitUndoData | null = null,
+    undoData: CheckUndoData | LimitUndoData | PersonUndoData | null = null,
   ): void {
     this.db.connection
       .prepare(
@@ -411,6 +478,7 @@ export class OrderService {
       doneBy: r.done_by,
       lastCheckedOn: r.last_checked_on,
       lastCheckedBy: r.last_checked_by,
+      assignee: r.assignee,
     }));
   }
 }
@@ -429,6 +497,7 @@ interface OrderRow {
   received_on: string;
   status: 'active' | 'completed';
   completed_on: string | null;
+  lead_person: string | null;
 }
 
 interface StepRow {
@@ -444,6 +513,7 @@ interface StepRow {
   done_by: string | null;
   last_checked_on: string | null;
   last_checked_by: string | null;
+  assignee: string | null;
 }
 
 interface HistoryRow {
@@ -464,6 +534,7 @@ function isUndoable(action: HistoryAction): action is UndoableAction {
 
 /** Czy wpis wciąż działa i da się go bezpiecznie cofnąć (stare wpisy bez zapisanego stanu: tylko „zrobione”). */
 function canRevert(order: Order, entry: HistoryRow): boolean {
+  if (entry.action === 'lead_changed') return entry.undo_data !== null;
   const step = order.steps.find((s) => s.position === entry.step_position);
   if (!step) return false;
   if (entry.action === 'step_done') {
@@ -471,7 +542,16 @@ function canRevert(order: Order, entry: HistoryRow): boolean {
       step.status === 'done' && !order.steps.some((s) => s.position > step.position && s.status === 'done')
     );
   }
+  if (entry.action === 'step_assigned') return step.status !== 'done' && entry.undo_data !== null;
   return step.status === 'active' && entry.undo_data !== null;
+}
+
+/** Opis cofnięcia w historii; przy limicie i osobach z tym, co było zmienione (np. „Anna → Piotr”). */
+function undoNote(entry: HistoryRow): string {
+  const label = UNDO_LABEL[entry.action as UndoableAction];
+  if (entry.action === 'limit_changed') return `${label} ${entry.note}`;
+  if (entry.action === 'lead_changed' || entry.action === 'step_assigned') return `${label}: ${entry.note}`;
+  return label;
 }
 
 function checkUndoData(step: OrderStep): CheckUndoData {
@@ -493,11 +573,17 @@ function toOrder(r: OrderRow, steps: OrderStep[]): Order {
     receivedOn: r.received_on,
     status: r.status,
     completedOn: r.completed_on,
+    leadPerson: r.lead_person,
     steps,
   };
 }
 
 const MAX_STEP_LIMIT_DAYS = 365;
+
+/** Opis zmiany osoby do historii, np. „brak → Bartek”. */
+function change(from: string | null, to: string | null): string {
+  return `${from ?? NOBODY} → ${to ?? NOBODY}`;
+}
 
 function parseStepLimit(text: string): number {
   const value = Number(text.trim());

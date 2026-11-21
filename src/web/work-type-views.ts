@@ -1,5 +1,5 @@
 import { html, type SafeHtml } from './html.js';
-import { fold, formatDate, personButtons } from './view-helpers.js';
+import { fold, formatDate, numberStepper, personButtons } from './view-helpers.js';
 import type { Person } from '../modules/people/people-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { WorkTypeAction, WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin.js';
@@ -124,13 +124,18 @@ function stepRow(step: StepDraft, n: number, total: number): SafeHtml {
       </select>
     </td>
     <td>
-      <input
-        name="stepLimit_${n}"
-        value="${step.limit}"
-        inputmode="numeric"
-        class="limit"
-        aria-label="Limit kroku ${n} (dni roboczych)"
-      />
+      ${numberStepper(
+        `Limit kroku ${n} (dni roboczych)`,
+        html`<input
+          name="stepLimit_${n}"
+          value="${step.limit}"
+          inputmode="numeric"
+          class="limit"
+          min="1"
+          max="365"
+          aria-label="Limit kroku ${n} (dni roboczych)"
+        />`,
+      )}
     </td>
     <td class="center">
       <input

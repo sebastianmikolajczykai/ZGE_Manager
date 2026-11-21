@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { html } from '../../../src/web/html.js';
 import {
   avatar,
+  numberStepper,
   historyList,
   personButtons,
   personColour,
@@ -66,6 +67,32 @@ describe('przyciski osób', () => {
     expect(button.replace(/<span[^>]*aria-hidden="true"[^>]*>[^<]*<\/span>/g, '')).toMatch(
       />\s*Zrobione: Bartek\s*$/,
     );
+  });
+});
+
+describe('przyciski − / + przy polu liczbowym', () => {
+  const input = html`<input type="number" name="redAfterIdleDays" min="1" max="30" value="3" />`;
+  const out = numberStepper('Czerwone po', input).value;
+
+  it('puts the field first, so the surrounding label still names the field (not the minus button)', () => {
+    expect(out.indexOf('name="redAfterIdleDays"')).toBeLessThan(out.indexOf('<button'));
+    expect(out.indexOf('data-step="-1"')).toBeLessThan(out.indexOf('data-step="1"'));
+    expect(out).toContain('class="step-btn minus"');
+  });
+
+  it('the buttons do not send the form (type="button"), they only change the number', () => {
+    expect(out.match(/<button type="button"/g)).toHaveLength(2);
+    expect(out).toContain('data-step="-1"');
+    expect(out).toContain('data-step="1"');
+  });
+
+  it('names the buttons for screen readers with the field name', () => {
+    expect(out).toContain('aria-label="Zmniejsz: Czerwone po"');
+    expect(out).toContain('aria-label="Zwiększ: Czerwone po"');
+  });
+
+  it('escapes the field name', () => {
+    expect(numberStepper('<b>', input).value).toContain('Zmniejsz: &lt;b&gt;');
   });
 });
 

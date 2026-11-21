@@ -40,6 +40,13 @@ describe('layout (wygląd w stylu ZGE)', () => {
     expect(() => layout('x', html``, 0)).toThrow('Nieprawidłowy czas odświeżania');
   });
 
+  it('makes the − / + buttons change the number next to them within its min and max', () => {
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    expect(script).toContain('[data-step]');
+    expect(script).toContain("getAttribute('min')");
+    expect(script).toContain("getAttribute('max')");
+  });
+
   it('does not reload the list while something is typed in the search box', () => {
     const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
     expect(script).toContain("getElementById('szukaj')");

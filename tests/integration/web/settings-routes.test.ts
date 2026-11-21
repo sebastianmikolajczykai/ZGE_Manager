@@ -67,6 +67,15 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     expect(page).toContain('Zapisz: Anna');
   });
 
+  it('has − / + buttons at every number field (thresholds, reminders, refresh)', async () => {
+    const page = await settingsPage();
+    for (const label of ['Przypomnienie o ofercie po', 'Odświeżanie ekranu co (sekund)']) {
+      expect(page).toContain(`aria-label="Zmniejsz: ${label}"`);
+      expect(page).toContain(`aria-label="Zwiększ: ${label}"`);
+    }
+    expect(page).not.toContain('aria-label="Zwiększ: Miganie włączone"');
+  });
+
   it('the "Czy na pewno?" window is on by default and can be switched off in Ustawienia', async () => {
     expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('<dialog id="potwierdz"');
     await saveThresholds({ confirmActions: '' });
