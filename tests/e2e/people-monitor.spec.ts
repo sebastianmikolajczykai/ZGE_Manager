@@ -72,11 +72,11 @@ test('przyciski − / + zmieniają liczbę w Ustawieniach (w granicach), zapis j
   const before = Number(await field.inputValue());
   await page.getByRole('button', { name: 'Zwiększ: Przypomnienie o ofercie po' }).click();
   await expect(field).toHaveValue(String(before + 1));
-  await page.getByRole('button', { name: 'Zapisz: Bartek' }).click();
+  await page.getByRole('button', { name: 'Zapisz zmiany: Bartek' }).click();
   await expect(field).toHaveValue(String(before + 1));
 
   await page.getByRole('button', { name: 'Zmniejsz: Przypomnienie o ofercie po' }).click();
-  await page.getByRole('button', { name: 'Zapisz: Bartek' }).click();
+  await page.getByRole('button', { name: 'Zapisz zmiany: Bartek' }).click();
   await expect(field).toHaveValue(String(before));
 
   // Dolna granica: „Żółte przed limitem kroku” nie spadnie poniżej minimum pola.

@@ -58,13 +58,13 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     }
   });
 
-  it('shows the current values in editable fields with "Zapisz: osoba" buttons', async () => {
+  it('shows the current values in editable fields with "Zapisz zmiany: osoba" buttons', async () => {
     const page = await settingsPage();
     expect(page).toContain('Kolory i przypomnienia');
     expect(page).toMatch(/name="redAfterIdleDays"[^>]*value="3"/);
     expect(page).toMatch(/name="blinkEnabled"[^>]*checked/);
     expect(page).toMatch(/name="confirmActions"[^>]*checked/);
-    expect(page).toContain('Zapisz: Anna');
+    expect(page).toContain('💾 Zapisz zmiany: Anna');
   });
 
   it('has − / + buttons at every number field (thresholds, reminders, refresh)', async () => {
@@ -83,20 +83,63 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('data-all="0"');
   });
 
-  it('saves a change, shows the new value and logs who changed it', async () => {
-    const res = await saveThresholds({ redAfterIdleDays: '4' }, 'Piotr');
+  it('saves a change, shows the new value, a green "saved" note and logs who changed it', async () => {
+    const res = await saveThresholds({ redAfterIdleDays: '4', refreshSeconds: '90' }, 'Piotr');
     expect(res.statusCode).toBe(303);
-    expect(res.headers.location).toBe('/ustawienia');
-    const page = await settingsPage();
+    expect(res.headers.location).toBe('/ustawienia?zapisano=2&kto=Piotr#kolory');
+    const page = (await app.inject({ method: 'GET', url: res.headers.location as string })).body;
     expect(page).toMatch(/name="redAfterIdleDays"[^>]*value="4"/);
     expect(page).toContain('Piotr: „Czerwone, gdy brak ruchu przez” 3 → 4');
+    expect(page).toMatch(/class="saved"[^>]*>✓ Zapisano 2 zmiany \(Piotr\)/);
   });
 
-  it('a wrong value shows a readable error and keeps what was typed', async () => {
-    const res = await saveThresholds({ yellowAfterIdleDays: '5', redAfterIdleDays: '4' });
+  it('saving without any change says so instead of pretending to save', async () => {
+    const res = await saveThresholds({}, 'Piotr');
+    expect(res.headers.location).toBe('/ustawienia?zapisano=0&kto=Piotr#kolory');
+    const page = (await app.inject({ method: 'GET', url: res.headers.location as string })).body;
+    expect(page).toContain('Nic nie zmieniono');
+  });
+
+  it('has a clear "Zapisz zmiany" box asking who saves, with person buttons', async () => {
+    const page = await settingsPage();
+    expect(page).toContain('class="save-box"');
+    expect(page).toContain('Kto zapisuje? Kliknij swoje imię');
+    expect(page).toContain('💾 Zapisz zmiany: Anna');
+    expect(page).toContain('data-dirty-form');
+  });
+
+  it('wrong values: every error under its own field, typed values kept, nothing saved', async () => {
+    const res = await saveThresholds({
+      yellowAfterIdleDays: '5',
+      redAfterIdleDays: '4',
+      refreshSeconds: 'abc',
+    });
     expect(res.statusCode).toBe(400);
-    expect(res.body).toMatch(/role="alert"[^>]*>Czerwone musi przyjść później niż żółte/);
+    expect(res.body).toMatch(/role="alert"[^>]*>Nie zapisano\. Popraw zaznaczone pola \(2\)/);
+    expect(res.body).toMatch(
+      /name="redAfterIdleDays"[\s\S]*?class="field-error"[^>]*>Czerwone musi przyjść później niż żółte: wpisz co najmniej 6\./,
+    );
+    expect(res.body).toMatch(
+      /name="refreshSeconds"[\s\S]*?class="field-error"[^>]*>Wpisz liczbę całkowitą od 15 do 600\./,
+    );
     expect(res.body).toMatch(/name="yellowAfterIdleDays"[^>]*value="5"/);
+    expect(res.body).toMatch(/name="refreshSeconds"[^>]*value="abc"/);
+    expect(res.body).toMatch(/name="redAfterIdleDays"[^>]*aria-invalid="true"/);
+    expect(await settingsPage()).toMatch(/name="redAfterIdleDays"[^>]*value="3"/);
+  });
+
+  it('"Żółte przed limitem" ≥ a step limit is saved, with a yellow notice under the field', async () => {
+    expect(await settingsPage()).not.toContain('class="field-notice"');
+    const res = await saveThresholds({ warnDaysBeforeLimit: '2' });
+    expect(res.statusCode).toBe(303);
+    expect(await settingsPage()).toMatch(
+      /name="warnDaysBeforeLimit"[\s\S]*?class="field-notice"[^>]*>Uwaga: kroki z limitem do 2 dni \(np\. „[^”]+”\) będą żółte już od pierwszego dnia\./,
+    );
+  });
+
+  it('a "zapisano" link with nonsense in it shows no note', async () => {
+    const page = (await app.inject({ method: 'GET', url: '/ustawienia?zapisano=abc&kto=X' })).body;
+    expect(page).not.toContain('class="saved"');
   });
 
   it('the board colours follow the new settings at once', async () => {
@@ -138,6 +181,7 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     await saveThresholds({ redAfterIdleDays: '6' });
     const res = await post('/ustawienia/progi/domyslne', { person: 'Piotr' });
     expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toBe('/ustawienia?zapisano=1&kto=Piotr#kolory');
     const page = await settingsPage();
     expect(page).toMatch(/name="redAfterIdleDays"[^>]*value="3"/);
     expect(page).toContain('Piotr: „Czerwone, gdy brak ruchu przez” 6 → 3');

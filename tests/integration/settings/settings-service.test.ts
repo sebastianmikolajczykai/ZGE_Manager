@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AppDatabase } from '../../../src/db.js';
-import { SettingsService, DEFAULT_APP_SETTINGS } from '../../../src/modules/settings/settings-service.js';
+import {
+  SettingsService,
+  SettingsValidationError,
+  DEFAULT_APP_SETTINGS,
+} from '../../../src/modules/settings/settings-service.js';
 import { DaysOffRepository } from '../../../src/modules/settings/days-off-repository.js';
 
 /** Formularz z ekranu Ustawień: wszystkie pola jako tekst, checkbox obecny tylko gdy zaznaczony. */
@@ -106,14 +110,40 @@ describe('SettingsService (Ustawienia: kolory i przypomnienia)', () => {
 
   it.each([
     [{ redAfterIdleDays: '2' }, /później niż żółte/],
-    [{ yellowAfterIdleDays: 'dwa' }, /liczbą całkowitą/],
-    [{ yellowAfterIdleDays: '1.5' }, /liczbą całkowitą/],
-    [{ yellowAfterIdleDays: '' }, /liczbą całkowitą/],
+    [{ yellowAfterIdleDays: 'dwa' }, /liczbę całkowitą/],
+    [{ yellowAfterIdleDays: '1.5' }, /liczbę całkowitą/],
+    [{ yellowAfterIdleDays: '' }, /liczbę całkowitą/],
     [{ warnDaysBeforeLimit: '-1' }, /od 0 do 10/],
+    [{ yellowAfterIdleDays: '1e1' }, /liczbę całkowitą/],
     [{ refreshSeconds: '5' }, /od 15 do 600/],
     [{ offerFollowUpDays: '0' }, /od 1 do 60/],
   ])('rejects %o with a readable message and saves nothing', (change, error) => {
     expect(() => settings.update(form(change), 'Łukasz')).toThrow(error);
+    expect(settings.get()).toEqual(DEFAULT_APP_SETTINGS);
+    expect(settings.history()).toEqual([]);
+  });
+
+  it('tells how many values were really saved (0 when nothing changed)', () => {
+    expect(settings.update(form({ redAfterIdleDays: '4', refreshSeconds: '90' }), 'Łukasz')).toBe(2);
+    expect(settings.update(form({ redAfterIdleDays: '4', refreshSeconds: '90' }), 'Łukasz')).toBe(0);
+    expect(settings.resetToDefaults('Bartek')).toBe(2);
+  });
+
+  it('a wrong form gives one message per wrong field and saves nothing', () => {
+    let caught: unknown;
+    try {
+      settings.update(
+        form({ yellowAfterIdleDays: '4', redAfterIdleDays: '4', refreshSeconds: 'x' }),
+        'Łukasz',
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(SettingsValidationError);
+    expect((caught as SettingsValidationError).fieldErrors).toEqual({
+      redAfterIdleDays: 'Czerwone musi przyjść później niż żółte: wpisz co najmniej 5.',
+      refreshSeconds: 'Wpisz liczbę całkowitą od 15 do 600.',
+    });
     expect(settings.get()).toEqual(DEFAULT_APP_SETTINGS);
     expect(settings.history()).toEqual([]);
   });

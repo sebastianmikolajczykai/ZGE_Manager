@@ -7,7 +7,7 @@ import type { WorkTypeRepository } from '../modules/work-types/work-type-reposit
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import type { OfferService } from '../modules/offers/offer-service.js';
 import { boardPage, orderDetail, orderForm, parseBoardFilter, type OrderFormValues } from './views.js';
-import { settingsFormValues, settingsPage } from './settings-views.js';
+import { settingsFormValues, settingsPage, type SavedNote } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
 import { monitorPage } from './monitor-views.js';
@@ -25,7 +25,12 @@ import {
   type Form,
   type PageRenderer,
 } from './http.js';
-import type { SettingsService } from '../modules/settings/settings-service.js';
+import {
+  SettingsValidationError,
+  type SettingErrors,
+  type SettingsService,
+} from '../modules/settings/settings-service.js';
+import { nearLimitNotice } from '../modules/settings/settings-validation.js';
 import type { DaysOffRepository } from '../modules/settings/days-off-repository.js';
 import type { WorkTypeAdmin } from '../modules/work-types/work-type-admin.js';
 import { registerWorkTypeRoutes } from './work-type-routes.js';
@@ -117,7 +122,9 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     s.pages.send(reply, 'Statystyki', statsPage(s.stats.summary(), s.stats.clients())),
   );
 
-  app.get('/ustawienia', (_req, reply) => renderSettings(reply, s, null));
+  app.get('/ustawienia', (req, reply) =>
+    renderSettings(reply, s, null, { saved: savedNoteFrom(req.query as Form) }),
+  );
   app.post('/ustawienia/osoby', (req, reply) => {
     try {
       s.people.add((req.body as Form).name ?? '');
@@ -134,16 +141,21 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   app.post('/ustawienia/progi', (req, reply) => {
     const form = req.body as Form;
     try {
-      s.settings.update(form, form.person ?? '');
-      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+      const count = s.settings.update(form, form.person ?? '');
+      return reply.redirect(savedUrl(count, form.person ?? ''), HTTP_SEE_OTHER);
     } catch (err) {
-      return renderSettings(reply, s, message(err), form);
+      if (!(err instanceof SettingsValidationError))
+        return renderSettings(reply, s, message(err), { typed: form });
+      const count = Object.keys(err.fieldErrors).length;
+      const summary = `Nie zapisano. Popraw zaznaczone pola (${count}).`;
+      return renderSettings(reply, s, summary, { typed: form, fieldErrors: err.fieldErrors });
     }
   });
   app.post('/ustawienia/progi/domyslne', (req, reply) => {
     try {
-      s.settings.resetToDefaults((req.body as Form).person ?? '');
-      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+      const person = (req.body as Form).person ?? '';
+      const count = s.settings.resetToDefaults(person);
+      return reply.redirect(savedUrl(count, person), HTTP_SEE_OTHER);
     } catch (err) {
       return renderSettings(reply, s, message(err));
     }
@@ -177,17 +189,30 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
 }
 
 /** Ekran Ustawień; przy błędzie pokazuje wpisane wartości, żeby nie trzeba było ich wpisywać od nowa. */
+/** Co dodatkowo pokazać na ekranie Ustawień. */
+interface SettingsExtras {
+  /** To, co ktoś wpisał (przy błędzie zostaje w polach). */
+  typed?: Form;
+  fieldErrors?: SettingErrors;
+  saved?: SavedNote | null;
+}
+
 function renderSettings(
   reply: FastifyReply,
   s: WebServices,
   error: string | null,
-  typed: Form | null = null,
+  extras: SettingsExtras = {},
 ) {
+  const values = extras.typed ?? settingsFormValues(s.settings.get());
+  const workTypes = s.workTypes.findAll();
   const view = {
-    values: typed ?? settingsFormValues(s.settings.get()),
+    values,
+    fieldErrors: extras.fieldErrors ?? {},
+    fieldNotices: limitNotices(values, workTypes),
+    saved: extras.saved ?? null,
     history: s.settings.history(),
     daysOff: s.daysOff.list(s.today()),
-    workTypes: s.workTypes.findAll(),
+    workTypes,
     workTypeHistory: s.workTypeAdmin.history(),
   };
   return s.pages.send(
@@ -196,6 +221,27 @@ function renderSettings(
     settingsPage(s.people.list(), view, error),
     error ? HTTP_BAD_REQUEST : 200,
   );
+}
+
+/** Po zapisie wracamy na Ustawienia z potwierdzeniem „Zapisano N zmian (osoba)”. */
+function savedUrl(count: number, person: string): string {
+  return `/ustawienia?zapisano=${count}&kto=${encodeURIComponent(person.trim())}#kolory`;
+}
+
+function savedNoteFrom(query: Form): SavedNote | null {
+  const count = query.zapisano ?? '';
+  const person = (query.kto ?? '').trim();
+  if (!/^\d+$/.test(count) || !person) return null;
+  return { count: Number(count), person };
+}
+
+/** Uwaga przy „Żółte przed limitem”, liczona od wartości widocznej w polu i kroków aktywnych rodzajów prac. */
+function limitNotices(values: Form, workTypes: ReturnType<WorkTypeRepository['findAll']>): SettingErrors {
+  const typed = (values.warnDaysBeforeLimit ?? '').trim();
+  if (!/^\d+$/.test(typed)) return {};
+  const steps = workTypes.filter((w) => !w.hidden).flatMap((w) => w.steps);
+  const notice = nearLimitNotice(Number(typed), steps);
+  return notice ? { warnDaysBeforeLimit: notice } : {};
 }
 
 /** Formularz zlecenia wypełniony danymi z przyjętej oferty. */
