@@ -44,6 +44,8 @@ function order(steps: OrderStep[]): Order {
 
 const HISTORY: HistoryEntry[] = [
   {
+    id: 1,
+    reverted: false,
     happenedOn: '2026-11-02',
     person: 'Bartek',
     action: 'created',
@@ -52,6 +54,8 @@ const HISTORY: HistoryEntry[] = [
     note: null,
   },
   {
+    id: 2,
+    reverted: false,
     happenedOn: '2026-11-03',
     person: 'Bartek',
     action: 'step_done',
@@ -248,6 +252,8 @@ describe('karta zlecenia: osoba prowadząca i osoby kroków', () => {
   it('describes changes of people in the history', () => {
     const entries: HistoryEntry[] = [
       {
+        id: 3,
+        reverted: false,
         happenedOn: '2026-11-04',
         person: 'Bartek',
         action: 'lead_changed',
@@ -256,6 +262,8 @@ describe('karta zlecenia: osoba prowadząca i osoby kroków', () => {
         note: 'brak → Marcelina',
       },
       {
+        id: 4,
+        reverted: false,
         happenedOn: '2026-11-04',
         person: 'Bartek',
         action: 'step_assigned',

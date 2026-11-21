@@ -6,6 +6,8 @@ import {
   formatDate,
   formatPrice,
   numberStepper,
+  historyList,
+  type HistoryUndo,
   personButtons,
   personTag,
   progressBar,
@@ -101,7 +103,7 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
       <a class="add" href="/zlecenia/nowe">+ Dodaj zlecenie</a>
       ${link('/', '🗂', 'Tablica')} ${link('/oferty', '📨', 'Oferty', counts.offersToCall)}
       ${link('/niezaplacone', '💰', 'Niezapłacone', counts.unpaidToRemind)}
-      ${link('/ustawienia', '⚙', 'Ustawienia')}
+      ${link('/statystyki', '📊', 'Statystyki')} ${link('/ustawienia', '⚙', 'Ustawienia')}
     </nav>
     <a class="monitor-link" href="/monitor" target="_blank" rel="noopener"
       ><span class="ic" aria-hidden="true">📺</span>Widok na monitor</a
@@ -281,6 +283,8 @@ export function orderDetail(
   urgency: Urgency | null,
   history: HistoryEntry[],
   people: Person[],
+  /** Wpis historii, który można teraz cofnąć (null = nic). */
+  undoableId: number | null = null,
 ): SafeHtml {
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
@@ -325,8 +329,8 @@ export function orderDetail(
       }
     </dl>
     <h3>Kroki</h3>
-    ${stepsSection(order, people, urgency)} ${order.status === 'active' ? assignForm(order, people) : ''}
-    ${historySection(history)}
+    ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
+    ${historySection(history, orderUndo(order.id, undoableId, people))}
   </section>`;
 }
 
@@ -371,19 +375,24 @@ function stepsSection(order: Order, people: Person[], urgency: Urgency | null): 
   ${done.length > 0 ? undoForm(order.id, people) : ''}`;
 }
 
-/** Historia zlecenia (najnowsze na górze), zwijana. Używana też w zakładce Niezapłacone. */
-export function historySection(history: HistoryEntry[]): SafeHtml {
-  return fold(
-    'history',
-    `Historia (${history.length})`,
-    html`<ul class="history">
-      ${[...history]
-        .reverse()
-        .map(
-          (h) => html`<li>${avatar(h.person)}<time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`,
-        )}
-    </ul>`,
-  );
+/** Cofanie wpisów historii zlecenia; `fields` = np. ukryte pole „wróć do Niezapłaconych”. */
+export function orderUndo(
+  orderId: number,
+  entryId: number | null,
+  people: Person[],
+  fields?: SafeHtml,
+): HistoryUndo {
+  return {
+    entryId,
+    action: (id) => `/zlecenia/${orderId}/historia/${id}/cofnij`,
+    people,
+    ...(fields ? { fields } : {}),
+  };
+}
+
+/** Historia zlecenia (najnowsze na górze), zwijana; najnowszy działający wpis można cofnąć. Używana też w Niezapłaconych. */
+export function historySection(history: HistoryEntry[], undo: HistoryUndo): SafeHtml {
+  return fold('history', `Historia (${history.length})`, historyList(history, historyText, undo));
 }
 
 function stepItem(order: Order, step: OrderStep, people: Person[], urgency: Urgency | null): SafeHtml {
@@ -437,6 +446,7 @@ function assigneeTag(name: string): SafeHtml {
  * i zmieniać w trakcie). Zrobionych kroków nie ma, krok bez osoby należy do prowadzącego.
  */
 function assignForm(order: Order, people: Person[]): SafeHtml {
+  if (order.status !== 'active') return html``;
   const open = order.steps.filter((st) => st.status !== 'done');
   const fields = html`<label class="setting"
       ><span>Prowadzi zlecenie</span
@@ -502,20 +512,22 @@ function undoForm(orderId: number, people: Person[]): SafeHtml {
   </details>`;
 }
 
-/** Jak opisać każde zdarzenie w historii zlecenia (step = nazwa kroku w cudzysłowie lub nic). */
-const HISTORY_TEXT: Record<HistoryEntry['action'], (h: HistoryEntry, step: SafeHtml | string) => SafeHtml> = {
-  created: (h) => html`${h.person}: przyjęcie zlecenia`,
-  step_done: (h, step) => html`${h.person}: zrobione${step}`,
-  checked: (h, step) => html`${h.person}: sprawdzone dziś${step}`,
-  undone: (h, step) => html`${h.person}: cofnięcie${step}`,
-  payment_call: (h) => html`${h.person}: przypomnienie o zapłacie${h.note ? html` (${h.note})` : ''}`,
-  limit_changed: (h) => html`${h.person}: zmiana limitu „${h.stepName}”${h.note ? html` (${h.note})` : ''}`,
-  lead_changed: (h) => html`${h.person}: osoba prowadząca (${h.note})`,
-  step_assigned: (h, step) => html`${h.person}: osoba do kroku${step} (${h.note})`,
+/** Co zrobiono, słowami (bez osoby); `step` = nazwa kroku w cudzysłowie, `note` = notatka w nawiasie. */
+const HISTORY_WORDS: Record<HistoryEntry['action'], (step: SafeHtml, note: SafeHtml) => SafeHtml> = {
+  created: () => html`przyjęcie zlecenia`,
+  step_done: (step) => html`zrobione${step}`,
+  checked: (step) => html`sprawdzone dziś${step}`,
+  undone: (step, note) => html`cofnięcie${step}${note}`,
+  payment_call: (_step, note) => html`przypomnienie o zapłacie${note}`,
+  limit_changed: (step, note) => html`zmiana limitu${step}${note}`,
+  lead_changed: (_step, note) => html`osoba prowadząca${note}`,
+  step_assigned: (step, note) => html`osoba do kroku${step}${note}`,
 };
 
 export function historyText(h: HistoryEntry): SafeHtml {
-  return HISTORY_TEXT[h.action](h, h.stepName ? html` „${h.stepName}”` : '');
+  const step = h.stepName ? html` „${h.stepName}”` : html``;
+  const note = h.note ? html` (${h.note})` : html``;
+  return html`${h.person}: ${HISTORY_WORDS[h.action](step, note)}`;
 }
 
 export interface OrderFormValues {
@@ -791,7 +803,14 @@ td .assignee { display:flex; margin:4px 0 0; }
 div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .limit-change > summary { cursor:pointer; color:var(--muted); font-size:15px; margin-top:8px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history li { display:flex; gap:8px; align-items:center; margin:3px 0; }
-.history time { font-variant-numeric:tabular-nums; }
+.history time { font-variant-numeric:tabular-nums; white-space:nowrap; } .history li { align-items:flex-start; } .history .av { flex:none; }
+.history li.reverted { opacity:.6; } .history li.reverted s { display:flex; gap:8px; align-items:flex-start; }
+.history li.can-undo { display:block; } .undo-entry > summary { list-style:none; display:flex; gap:8px; align-items:center; flex-wrap:wrap; cursor:pointer; padding:4px 8px; margin:0 -8px; border-radius:8px; border:1px dashed var(--red-ink); color:var(--ink); }
+.undo-entry > summary::-webkit-details-marker { display:none; } .undo-entry > summary:hover, .undo-entry[open] > summary { background:var(--red); }
+.undo-hint { margin-left:auto; color:var(--red-ink); font-weight:700; font-size:13px; white-space:nowrap; } .undo-entry[open] { padding-bottom:6px; }
+.recent-head { font-size:17px; margin:22px 0 6px; } .recent { list-style:none; padding:0; margin:0; background:var(--card); border-radius:14px; box-shadow:var(--shadow); }
+.recent li { display:flex; gap:10px; align-items:baseline; padding:8px 12px; border-top:1px solid var(--line); } .recent li:first-child { border-top:0; }
+.recent li span { color:var(--muted); } .recent li small { margin-left:auto; color:var(--muted); } .hint { color:var(--muted); font-size:14px; }
 .error { background:var(--red); color:var(--red-ink); padding:10px 14px; border-radius:10px; }
 .empty { background:#fff; padding:20px; border-radius:14px; box-shadow:var(--shadow); }
 .form-page { max-width:760px; background:#fff; padding:22px 24px; border-radius:16px; box-shadow:var(--shadow); }
@@ -820,7 +839,17 @@ dialog#potwierdz::backdrop { background:rgba(15,61,36,.55); }
   .split { grid-template-columns:minmax(0,1fr) minmax(320px,29%); }
 }
 /* Jeszcze mniejszy ekran: kafelki w 3 kolumnach, karta zlecenia pod listą. */
-@media (max-width:1280px) { .tiles { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+.page-sub { margin:2px 0 0; color:var(--muted); } .section-head { font-size:19px; margin:24px 0 10px; }
+.stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:12px; }
+.stat { display:grid; grid-template-columns:auto 1fr; column-gap:12px; align-items:center; padding:14px; border-radius:14px; background:var(--card); box-shadow:var(--shadow); }
+.stat .ti { grid-row:span 2; width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-size:22px; }
+.stat b { font-size:24px; line-height:1.1; white-space:nowrap; } .stat span:last-child { font-size:14px; color:var(--muted); font-weight:600; }
+.stat.clients .ti { background:#dbeafe; } .stat.new .ti { background:#fae8ff; } .stat.income .ti, .stat.total .ti { background:var(--green); }
+.stat.income b, .stat.total b { color:var(--brand-dark); } .stat.unpaid .ti { background:var(--yellow); } .stat.progress .ti { background:#e0e7ff; }
+.months td.income { min-width:260px; } .income-bar { display:inline-block; vertical-align:middle; width:150px; height:12px; border-radius:6px; background:var(--line); overflow:hidden; margin-right:10px; }
+.income-bar span { display:block; height:100%; background:linear-gradient(90deg,#4ade80,var(--brand)); border-radius:6px; }
+.how { margin:20px 0; color:var(--muted); } .how summary { cursor:pointer; font-weight:600; color:var(--ink); }
+@media (max-width:1280px) { .tiles { grid-template-columns:repeat(3,minmax(0,1fr)); } .stats { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:1100px) { .split { grid-template-columns:1fr; } .detail { position:static; } }
 `;
 

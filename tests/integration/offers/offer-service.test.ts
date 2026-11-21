@@ -56,7 +56,7 @@ describe('OfferService', () => {
       sentBy: PERSON,
       lastContactOn: today,
     });
-    expect(offers.history(id)).toEqual([
+    expect(offers.history(id)).toMatchObject([
       { happenedOn: today, person: PERSON, action: 'created', note: null },
     ]);
   });
@@ -88,7 +88,7 @@ describe('OfferService', () => {
       offers.recordCall(id, OTHER, 'myśli, oddzwoni', 'again');
       expect(colourOn(id, '2026-12-01')).toBe('green');
       expect(offers.get(id)?.lastContactOn).toBe('2026-12-01');
-      expect(offers.history(id).at(-1)).toEqual({
+      expect(offers.history(id).at(-1)).toMatchObject({
         happenedOn: '2026-12-01',
         person: OTHER,
         action: 'called',

@@ -19,6 +19,19 @@ export interface UnpaidRow {
   urgency: Urgency;
 }
 
+/** Zlecenie oznaczone „Zapłacone” (do listy „Ostatnio zapłacone”, skąd można wejść na kartę i cofnąć). */
+export interface PaidRow {
+  orderId: number;
+  clientName: string;
+  pricePln: number | null;
+  paidOn: LocalDate;
+  paidBy: string | null;
+}
+
+/** Ile ostatnich zapłat pokazać pod listą. */
+export const RECENT_LIMIT = 10;
+const GROSZE_PER_PLN = 100;
+
 /**
  * Zakładka Niezapłacone: zlecenia na kroku zapłaty, kolor wg limitu dni roboczych,
  * rozmowy z przypomnieniem i „Zapłacone”. Zapis w zleceniach robi OrderService.
@@ -66,6 +79,30 @@ export class PaymentService {
     const step = paymentStepOf(order);
     if (!step) throw new Error(`Zlecenie nr ${orderId} nie czeka na zapłatę`);
     this.orders.completeStep(orderId, step.position, person);
+  }
+
+  /** Ostatnio oznaczone „Zapłacone”, najnowsze na górze. */
+  recentlyPaid(limit = RECENT_LIMIT): PaidRow[] {
+    const rows = this.db.connection
+      .prepare(
+        `SELECT o.id, o.client_name, o.price_grosze, s.done_on, s.done_by
+         FROM orders o JOIN order_steps s ON s.order_id = o.id AND s.payment = 1 AND s.status = 'done'
+         ORDER BY s.done_on DESC, o.id DESC LIMIT ?`,
+      )
+      .all(limit) as {
+      id: number;
+      client_name: string;
+      price_grosze: number | null;
+      done_on: string;
+      done_by: string | null;
+    }[];
+    return rows.map((r) => ({
+      orderId: r.id,
+      clientName: r.client_name,
+      pricePln: r.price_grosze === null ? null : r.price_grosze / GROSZE_PER_PLN,
+      paidOn: r.done_on,
+      paidBy: r.done_by,
+    }));
   }
 
   private toRow(order: Order, step: OrderStep, today: LocalDate): UnpaidRow {

@@ -108,6 +108,16 @@ describe('web routes', () => {
     expect(all).toContain('Nowy Klient');
   });
 
+  it('Statystyki: menu tab, totals and the client from an order', async () => {
+    await createOrder({ pricePln: '2 500' });
+    const res = await app.inject({ method: 'GET', url: '/statystyki' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('href="/statystyki"');
+    expect(res.body).toContain('Wszyscy klienci');
+    expect(res.body).toContain('Jan Przykładowy');
+    expect(res.body).toContain('listopad 2026');
+  });
+
   it('creating an order redirects to the board with the order open', async () => {
     const res = await createOrder();
     expect(res.statusCode).toBe(303);

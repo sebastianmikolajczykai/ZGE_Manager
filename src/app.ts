@@ -14,6 +14,7 @@ import { BoardService } from './modules/board/board-service.js';
 import { PeopleRepository } from './modules/people/people-repository.js';
 import { OfferService } from './modules/offers/offer-service.js';
 import { PaymentService } from './modules/payments/payment-service.js';
+import { StatsService } from './modules/stats/stats-service.js';
 import { registerRoutes } from './web/routes.js';
 
 /** Osoby wpisywane przy pierwszym uruchomieniu (potem edycja w Ustawieniach). */
@@ -44,7 +45,7 @@ export function buildApp({
   // Funkcje zamiast wartości: zmiana w Ustawieniach działa od razu, bez restartu.
   const rules = new UrgencyRules(() => settings.urgency());
   const board = new BoardService(db, orders, rules, today);
-  const offers = new OfferService(db, today, rules, () => settings.get().offerFollowUpDays);
+  const offers = new OfferService(db, today, rules, () => settings.get().offerFollowUpDays, orders);
   const payments = new PaymentService(db, orders, rules, today);
   const isRed = (row: { urgency: { colour: string } }) => row.urgency.colour === 'red';
   const pages = new PageRenderer(
@@ -72,6 +73,7 @@ export function buildApp({
     workTypes,
     offers,
     payments,
+    stats: new StatsService(db, today),
     today,
     settings,
     daysOff,

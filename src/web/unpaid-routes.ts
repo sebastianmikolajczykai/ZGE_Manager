@@ -75,7 +75,18 @@ function renderUnpaid(
         : `Nie ma zlecenia o numerze ${orderId}`;
       return s.pages.send(reply, 'Nie znaleziono', unpaidPage(rows, null, msg), HTTP_NOT_FOUND);
     }
-    detail = unpaidDetail(row, row.urgency, s.orders.history(orderId), s.people.list());
+    detail = unpaidDetail(
+      row,
+      row.urgency,
+      s.orders.history(orderId),
+      s.people.list(),
+      s.orders.undoableEntryId(orderId),
+    );
   }
-  return s.pages.send(reply, TITLE, unpaidPage(rows, detail, error, orderId), status);
+  return s.pages.send(
+    reply,
+    TITLE,
+    unpaidPage(rows, detail, error, orderId, s.payments.recentlyPaid()),
+    status,
+  );
 }

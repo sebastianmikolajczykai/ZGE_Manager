@@ -1,7 +1,7 @@
 import { html, type SafeHtml } from './html.js';
 import { formatDate, formatPrice, personButtons, personTag, rowClass, statusChip } from './view-helpers.js';
-import { historySection } from './views.js';
-import type { UnpaidRow } from '../modules/payments/payment-service.js';
+import { historySection, orderUndo } from './views.js';
+import type { PaidRow, UnpaidRow } from '../modules/payments/payment-service.js';
 import type { HistoryEntry } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
 import type { Urgency } from '../modules/urgency/urgency-rules.js';
@@ -20,6 +20,7 @@ export function unpaidPage(
   detail: SafeHtml | null,
   error: string | null,
   selectedId: number | null = null,
+  recentlyPaid: PaidRow[] = [],
 ): SafeHtml {
   return html` ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <div class="page-head"><h1>Niezapłacone</h1></div>
@@ -27,6 +28,7 @@ export function unpaidPage(
     <div class="split">
       <section class="board" aria-label="Lista niezapłaconych">
         ${rows.length === 0 ? html`<p class="empty">Brak niezapłaconych zleceń.</p>` : unpaidTable(rows, selectedId)}
+        ${recentlyPaid.length > 0 ? paidList(recentlyPaid) : ''}
       </section>
       ${detail ?? html`<section class="detail placeholder" aria-label="Szczegóły zapłaty"><p>Kliknij klienta na liście, żeby zobaczyć szczegóły.</p></section>`}
     </div>`;
@@ -45,6 +47,21 @@ function unpaidSummary(rows: UnpaidRow[]): SafeHtml {
     </div>
     <div><span>Do przypomnienia dziś</span><b class="${toRemind > 0 ? 'late' : ''}">${toRemind}</b></div>
   </div>`;
+}
+
+/** Ostatnio zapłacone: link do karty zlecenia, gdzie w historii można cofnąć „Zapłacone”. */
+function paidList(paid: PaidRow[]): SafeHtml {
+  return html`<h2 class="recent-head">Ostatnio zapłacone</h2>
+    <ul class="recent">
+      ${paid.map(
+        (p) =>
+          html`<li>
+            <a href="/?zlecenie=${p.orderId}">${p.clientName}</a> <span>${formatPrice(p.pricePln)}</span>
+            <small>${formatDate(p.paidOn)}${p.paidBy ? `, ${p.paidBy}` : ''}</small>
+          </li>`,
+      )}
+    </ul>
+    <p class="hint">Pomyłka? Otwórz kartę zlecenia i w Historii kliknij wpis, żeby go cofnąć.</p>`;
 }
 
 function unpaidTable(rows: UnpaidRow[], selectedId: number | null): SafeHtml {
@@ -85,6 +102,7 @@ export function unpaidDetail(
   urgency: Urgency,
   history: HistoryEntry[],
   people: Person[],
+  undoableId: number | null = null,
 ): SafeHtml {
   const noteField = html`<label
     >Notatka z rozmowy <small>(opcjonalnie)</small><textarea name="note"></textarea>
@@ -113,6 +131,14 @@ export function unpaidDetail(
     <h3>Klient zapłacił</h3>
     ${personButtons(`/niezaplacone/${row.orderId}/zaplacone`, 'Zapłacone', people, 'primary')}
     <p><a class="button secondary" href="/?zlecenie=${row.orderId}">Pełna karta zlecenia →</a></p>
-    ${historySection(history)}
+    ${historySection(
+      history,
+      orderUndo(
+        row.orderId,
+        undoableId,
+        people,
+        html`<input type="hidden" name="widok" value="niezaplacone" />`,
+      ),
+    )}
   </section>`;
 }

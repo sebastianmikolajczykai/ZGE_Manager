@@ -10,6 +10,7 @@ import { BoardService } from '../../../src/modules/board/board-service.js';
 import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from '../../../src/modules/urgency/urgency-rules.js';
 import { OfferService } from '../../../src/modules/offers/offer-service.js';
 import { PaymentService } from '../../../src/modules/payments/payment-service.js';
+import { StatsService } from '../../../src/modules/stats/stats-service.js';
 
 describe('seedDemo (przykładowe dane do demo)', () => {
   let dir: string;
@@ -73,6 +74,14 @@ describe('seedDemo (przykładowe dane do demo)', () => {
     const history = orders.history(orders.listActive()[0]?.id ?? 0);
     expect(history.length).toBeGreaterThan(1);
     expect(history.map((h) => h.person)).toContain('Łukasz');
+  });
+
+  it('gives Statystyki something to show: separate example clients and income in earlier months', () => {
+    seedDemo(db, today);
+    const stats = new StatsService(db, () => today).summary();
+    expect(stats.totalClients).toBeGreaterThanOrEqual(10);
+    expect(stats.incomeTotalPln).toBeGreaterThan(0);
+    expect(stats.months.filter((m) => m.incomePln > 0).length).toBeGreaterThanOrEqual(2);
   });
 
   it('runs only on an empty database (never touches real data)', () => {
