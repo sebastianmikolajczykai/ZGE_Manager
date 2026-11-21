@@ -4,101 +4,22 @@ import type { UrgencySettings } from '../urgency/urgency-rules.js';
 import { requirePerson } from '../common/form-fields.js';
 import { DaysOffRepository } from './days-off-repository.js';
 
-/** Ustawienia, które Łukasz zmienia sam na ekranie Ustawienia. */
-export interface AppSettings {
-  yellowAfterIdleDays: number;
-  redAfterIdleDays: number;
-  warnDaysBeforeLimit: number;
-  blinkEnabled: boolean;
-  blinkAfterRedDays: number;
-  offerFollowUpDays: number;
-  refreshSeconds: number;
-  /** Okienko „Czy na pewno?” po kliknięciu osoby na karcie (zlecenie, oferta, zapłata). */
-  confirmActions: boolean;
-}
+import {
+  DEFAULT_APP_SETTINGS,
+  SETTING_FIELDS,
+  type AppSettings,
+  type SettingField,
+} from './settings-fields.js';
+import { validateSettingsForm, type SettingErrors } from './settings-validation.js';
 
-export type SettingKey = keyof AppSettings;
-
-export const DEFAULT_APP_SETTINGS: AppSettings = {
-  yellowAfterIdleDays: 2,
-  redAfterIdleDays: 3,
-  warnDaysBeforeLimit: 1,
-  blinkEnabled: true,
-  blinkAfterRedDays: 7,
-  offerFollowUpDays: 7,
-  refreshSeconds: 60,
-  confirmActions: true,
-};
-
-/** Opis pola: etykieta na ekranie i w historii, dozwolony zakres (dla liczb). */
-export interface SettingField {
-  key: SettingKey;
-  label: string;
-  hint: string;
-  type: 'number' | 'switch';
-  min: number;
-  max: number;
-}
-
-export const SETTING_FIELDS: readonly SettingField[] = [
-  {
-    key: 'yellowAfterIdleDays',
-    label: 'Żółte, gdy brak ruchu przez',
-    hint: 'dni roboczych',
-    type: 'number',
-    min: 1,
-    max: 30,
-  },
-  {
-    key: 'redAfterIdleDays',
-    label: 'Czerwone, gdy brak ruchu przez',
-    hint: 'dni roboczych',
-    type: 'number',
-    min: 1,
-    max: 60,
-  },
-  {
-    key: 'warnDaysBeforeLimit',
-    label: 'Żółte przed limitem kroku',
-    hint: 'dni wcześniej (0 = bez ostrzeżenia)',
-    type: 'number',
-    min: 0,
-    max: 10,
-  },
-  { key: 'blinkEnabled', label: 'Miganie włączone', hint: '', type: 'switch', min: 0, max: 1 },
-  {
-    key: 'blinkAfterRedDays',
-    label: 'Miganie po tylu dniach na czerwono',
-    hint: 'dni roboczych',
-    type: 'number',
-    min: 1,
-    max: 60,
-  },
-  {
-    key: 'offerFollowUpDays',
-    label: 'Przypomnienie o ofercie po',
-    hint: 'dni roboczych',
-    type: 'number',
-    min: 1,
-    max: 60,
-  },
-  {
-    key: 'refreshSeconds',
-    label: 'Odświeżanie ekranu co (sekund)',
-    hint: 'od 15 do 600',
-    type: 'number',
-    min: 15,
-    max: 600,
-  },
-  {
-    key: 'confirmActions',
-    label: 'Pytaj „Czy na pewno?” po kliknięciu osoby',
-    hint: 'np. „Zapłacone: Bartek” trzeba potwierdzić drugim kliknięciem',
-    type: 'switch',
-    min: 0,
-    max: 1,
-  },
-];
+export type { SettingErrors } from './settings-validation.js';
+export {
+  DEFAULT_APP_SETTINGS,
+  SETTING_FIELDS,
+  type AppSettings,
+  type SettingField,
+  type SettingKey,
+} from './settings-fields.js';
 
 export interface SettingsHistoryEntry {
   happenedOn: LocalDate;
@@ -136,14 +57,20 @@ export class SettingsService {
     return result;
   }
 
-  /** Zapisuje wartości z formularza. Przy błędzie nie zapisuje niczego. */
-  update(raw: Record<string, string>, person: string): void {
+  /**
+   * Zapisuje wartości z formularza i zwraca, ile z nich naprawdę się zmieniło.
+   * Przy błędzie nie zapisuje niczego i rzuca SettingsValidationError z komunikatem przy każdym złym polu.
+   */
+  update(raw: Record<string, string>, person: string): number {
     const who = requirePerson(person);
-    this.save(parseForm(raw), who);
+    const { settings, errors } = validateSettingsForm(raw);
+    if (!settings) throw new SettingsValidationError(errors);
+    return this.save(settings, who);
   }
 
-  resetToDefaults(person: string): void {
-    this.save(DEFAULT_APP_SETTINGS, requirePerson(person));
+  /** Przywraca wartości domyślne; zwraca liczbę zmienionych pól. */
+  resetToDefaults(person: string): number {
+    return this.save(DEFAULT_APP_SETTINGS, requirePerson(person));
   }
 
   /** Najnowsze zmiany na górze. */
@@ -177,7 +104,7 @@ export class SettingsService {
     };
   }
 
-  private save(next: AppSettings, person: string): void {
+  private save(next: AppSettings, person: string): number {
     const current = this.get();
     const upsert = this.db.connection.prepare(
       'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -185,6 +112,7 @@ export class SettingsService {
     const log = this.db.connection.prepare(
       'INSERT INTO settings_history (happened_on, person, key, old_value, new_value) VALUES (?, ?, ?, ?, ?)',
     );
+    let changed = 0;
     this.db.connection.transaction(() => {
       for (const field of SETTING_FIELDS) {
         const before = toNumber(current[field.key]);
@@ -192,33 +120,19 @@ export class SettingsService {
         if (before === after) continue;
         upsert.run(field.key, after);
         log.run(this.today(), person, field.key, before, after);
+        changed += 1;
       }
     })();
+    return changed;
   }
 }
 
-function parseForm(raw: Record<string, string>): AppSettings {
-  const result = { ...DEFAULT_APP_SETTINGS };
-  for (const field of SETTING_FIELDS) {
-    if (field.type === 'switch') {
-      setValue(result, field, raw[field.key] ? SWITCH_ON : SWITCH_OFF);
-      continue;
-    }
-    setValue(result, field, parseNumber(field, raw[field.key] ?? ''));
+/** Błędne pola formularza ustawień: komunikat przy każdym polu, w `message` wszystkie naraz. */
+export class SettingsValidationError extends Error {
+  constructor(readonly fieldErrors: SettingErrors) {
+    super(Object.values(fieldErrors).join(' '));
+    this.name = 'SettingsValidationError';
   }
-  if (result.redAfterIdleDays <= result.yellowAfterIdleDays) {
-    throw new Error('Czerwone musi przyjść później niż żółte (więcej dni bez ruchu)');
-  }
-  return result;
-}
-
-function parseNumber(field: SettingField, text: string): number {
-  const trimmed = text.trim();
-  const value = Number(trimmed);
-  if (trimmed === '' || !Number.isInteger(value) || value < field.min || value > field.max) {
-    throw new Error(`„${field.label}” musi być liczbą całkowitą od ${field.min} do ${field.max}`);
-  }
-  return value;
 }
 
 function setValue(target: AppSettings, field: SettingField, value: number): void {

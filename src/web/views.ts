@@ -318,6 +318,8 @@ export function orderDetail(
   people: Person[],
   /** Wpisy historii, do których można cofnąć zlecenie (najnowszy pierwszy). */
   undoableIds: number[] = [],
+  /** Ramka z wiadomością SMS (tylko gdy zlecenie czeka na zapłatę). */
+  messageBox: SafeHtml | null = null,
 ): SafeHtml {
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
@@ -353,6 +355,7 @@ export function orderDetail(
           : ''
       }
     </dl>
+    ${messageBox ?? ''}
     <h3>Kroki</h3>
     ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
     ${historySection(history, orderUndo(order.id, undoableIds, people))}
@@ -710,6 +713,41 @@ document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 });
+// Ustawienia: podświetlenie niezapisanych zmian, licznik i pytanie przeglądarki przy wyjściu bez zapisu.
+document.querySelectorAll('form[data-dirty-form]').forEach(function (form) {
+  var fields = form.querySelectorAll('input[name]');
+  var note = form.querySelector('.dirty-note'), counter = form.querySelector('.dirty-count');
+  var startDirty = form.getAttribute('data-dirty-form') === '1', submitting = false;
+  function changed(i) { return i.type === 'checkbox' ? i.checked !== i.defaultChecked : i.value !== i.defaultValue; }
+  function update() {
+    var n = 0;
+    fields.forEach(function (i) {
+      var c = changed(i);
+      if (i.closest('.setting')) i.closest('.setting').classList.toggle('dirty', c);
+      if (c) n++;
+    });
+    if (counter) counter.textContent = n > 0 ? ': ' + n : '';
+    if (note) note.hidden = n === 0 && !startDirty;
+    return n;
+  }
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  form.addEventListener('submit', function () { submitting = true; });
+  window.addEventListener('beforeunload', function (e) {
+    if (submitting || (update() === 0 && !startDirty)) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+});
+// „Kopiuj wiadomość”: kopiuje tekst SMS do schowka (niczego nie wysyła).
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var field = document.getElementById(b.getAttribute('data-copy'));
+    var done = function () { b.textContent = '✓ Skopiowano'; setTimeout(function () { b.textContent = '📋 Kopiuj wiadomość'; }, 3000); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(field.value).then(done);
+    else { field.select(); document.execCommand('copy'); done(); }
+  });
+});
 // Okienko „Czy na pewno?”: kliknięcie osoby na karcie trzeba potwierdzić drugim kliknięciem „Tak, zapisz”.
 var ask = document.getElementById('potwierdz');
 var askAll = ask && ask.getAttribute('data-all') === '1';
@@ -844,6 +882,8 @@ details.fold > summary:hover { color:var(--brand); }
 .settings-nav { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px; } .settings-nav a { padding:7px 14px; border-radius:999px; background:var(--green); color:var(--green-ink); text-decoration:none; font-weight:600; font-size:15px; }
 .form-page h3 { font-size:19px; margin:26px 0 6px; padding-top:14px; border-top:1px solid var(--line); scroll-margin-top:12px; }
 form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
+/* Długie pola (numer konta, link): pole pod opisem, na całą szerokość. */
+form.people > label.setting.wide { grid-template-columns:minmax(0,1fr); } .setting.wide input { grid-column:1; grid-row:auto; }
 .setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
 .setting input { grid-column:2; grid-row:1 / span 2; }
 .assignee { display:inline-flex; align-items:center; gap:4px; margin-left:8px; font-size:14px; font-weight:600; color:var(--muted); white-space:nowrap; }
@@ -858,6 +898,16 @@ td .assignee { display:flex; margin:4px 0 0; }
 .step-btn:hover { background:var(--green); border-color:var(--brand); }
 .setting input[type=number] { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; text-align:right; }
 .setting input[type=date], .setting input.text { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; }
+.setting .field-error, .setting .field-notice { grid-column:1 / -1; grid-row:auto; font-size:15px; font-weight:600; padding:6px 10px; border-radius:8px; margin-top:4px; }
+.setting .field-error { color:var(--red-ink); background:var(--red); } .setting .field-error::before { content:"⚠ "; }
+.setting .field-notice { color:var(--yellow-ink); background:var(--yellow); }
+.setting.has-error input[type=number] { border:2px solid var(--red-bar); }
+.setting.dirty { background:#fffbeb; box-shadow:inset 4px 0 0 var(--yellow-bar); padding-left:10px; }
+.save-box { flex-basis:100%; margin-top:14px; padding:12px 14px; border:2px solid var(--brand); border-radius:12px; background:var(--green); }
+.save-title { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0; font-size:18px; color:var(--green-ink); }
+.dirty-note { background:var(--yellow); color:var(--yellow-ink); border-radius:999px; padding:3px 12px; font-size:15px; font-weight:700; }
+.saved { background:var(--green); color:var(--green-ink); border:1px solid var(--green-bar); border-radius:10px; padding:10px 14px; font-weight:700; }
+.saved.none { background:#f3f4f6; color:var(--ink); border-color:var(--line); font-weight:600; }
 .setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
 /* Edytor rodzaju pracy. */
 .form-page.wide { max-width:1100px; }
@@ -872,6 +922,10 @@ td .assignee { display:flex; margin:4px 0 0; }
 .work-types li { margin:6px 0; } .work-types a { font-weight:700; color:var(--ink); } .hidden-mark { color:var(--red-ink); }
 div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .limit-change > summary { cursor:pointer; color:var(--muted); font-size:15px; margin-top:8px; }
+/* Zmiana limitu w karcie zlecenia: karta jest wąska, więc opis na górze, a − / pole / + w osobnym wierszu pod nim. */
+.limit-change form.people > label.setting { grid-template-columns:minmax(0,1fr); }
+.limit-change .setting small, .limit-change .setting .stepper { grid-column:1; grid-row:auto; }
+.limit-change .setting .stepper { max-width:240px; margin-top:6px; }
 .history { list-style:none; padding:0; font-size:15px; color:var(--muted); } .history li { display:flex; gap:8px; align-items:center; margin:3px 0; }
 .history time { font-variant-numeric:tabular-nums; white-space:nowrap; } .history li { align-items:flex-start; } .history .av { flex:none; }
 .history li.reverted { opacity:.6; } .history li.reverted s { display:flex; gap:8px; align-items:flex-start; }
@@ -890,6 +944,10 @@ div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .order-form label, form.inline label { display:block; margin:10px 0; font-weight:600; }
 .order-form input, .order-form select, .order-form textarea, form.inline input { display:block; width:100%; font:inherit; padding:9px 10px; margin-top:4px; border:1px solid #d1d5db; border-radius:10px; }
 /* Oferty i Niezapłacone: blok rozmowy wyróżniony jak „CO TERAZ”. */
+/* Wiadomość SMS do klienta: zielona ramka z tekstem do skopiowania. */
+.sms-box { background:#f0fdf4; border-left:6px solid var(--brand); border-radius:12px; padding:12px 14px; margin:6px 0 12px; }
+.sms-text { width:100%; font:inherit; font-size:15px; line-height:1.45; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; resize:vertical; field-sizing:content; }
+.sms-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0 0; } .sms-actions small { color:var(--muted); }
 .offer-call { background:#eff6ff; border-left:6px solid var(--select); border-radius:12px; padding:12px 14px; margin:6px 0 12px; }
 .offer-call label, form.people > label { flex-basis:100%; }
 .offer-call textarea { display:block; width:100%; font:inherit; padding:8px; margin:4px 0; border:1px solid #bfdbfe; border-radius:10px; }

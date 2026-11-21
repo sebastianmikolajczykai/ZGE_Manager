@@ -17,20 +17,24 @@ export function personButtons(
   // data-confirm: okienko „Czy na pewno?” nawet wtedy, gdy w Ustawieniach jest wyłączone.
   const confirm = alwaysConfirm ? html` data-confirm="1"` : '';
   return html`<form method="post" action="${action}" class="people" ${confirm}>
-    ${fields}
-    ${people.map(
-      (p) =>
-        html`<button
-          class="${style} person"
-          style="--p:${personColour(p.name)}"
-          name="person"
-          value="${p.name}"
-          data-label="${label}: ${p.name}"
-        >
-          ${avatar(p.name)} ${label}: ${p.name}
-        </button>`,
-    )}
+    ${fields} ${personButtonList(label, people, style)}
   </form>`;
+}
+
+/** Same przyciski „{etykieta}: {osoba}” (wysyłają pole person); do wstawienia we własny formularz. */
+export function personButtonList(label: string, people: Person[], style: string): SafeHtml {
+  return html`${people.map(
+    (p) =>
+      html`<button
+        class="${style} person"
+        style="--p:${personColour(p.name)}"
+        name="person"
+        value="${p.name}"
+        data-label="${label}: ${p.name}"
+      >
+        ${avatar(p.name)} ${label}: ${p.name}
+      </button>`,
+  )}`;
 }
 
 export function rowClass(u: Urgency): string {
@@ -191,9 +195,14 @@ function undoItem(
 
 /** „1 wpis”, „3 wpisy”, „5 wpisów”, „22 wpisy” (polska odmiana). */
 export function entriesText(count: number): string {
+  return countText(count, 'wpis', 'wpisy', 'wpisów');
+}
+
+/** Liczba z polską odmianą: 1 → `one`, 2–4 (bez 12–14) → `few`, reszta → `many`. */
+export function countText(count: number, one: string, few: string, many: string): string {
+  if (count === 1) return `1 ${one}`;
   const lastDigit = count % 10;
   const lastTwo = count % 100;
-  if (count === 1) return '1 wpis';
-  const few = lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14);
-  return `${count} ${few ? 'wpisy' : 'wpisów'}`;
+  const isFew = lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14);
+  return `${count} ${isFew ? few : many}`;
 }

@@ -163,6 +163,76 @@ describe('Niezapłacone screens', () => {
     expect(res.body).toContain('Do tego wpisu nie można cofnąć zlecenia');
   });
 
+  describe('wiadomość SMS do klienta', () => {
+    const ACCOUNT = '66 1050 1445 1000 0090 3021 6767';
+    const REVIEW = 'https://g.page/r/przyklad/review';
+
+    it('without an account number the card says to fill it in Ustawienia, no copy button', async () => {
+      const id = await handOver();
+      const card = (await get(`/niezaplacone?zlecenie=${id}`)).body;
+      expect(card).toContain('Wiadomość do klienta (SMS)');
+      expect(card).toContain('Uzupełnij numer konta w Ustawieniach');
+      expect(card).toContain('href="/ustawienia#wiadomosc"');
+      expect(card).not.toContain('data-copy=');
+    });
+
+    it('with Settings filled the card shows the ready message and a copy button', async () => {
+      await post('/ustawienia/wiadomosc', { bankAccount: ACCOUNT, reviewLink: REVIEW, person: 'Anna' });
+      const id = await handOver();
+      const card = (await get(`/niezaplacone?zlecenie=${id}`)).body;
+      expect(card).toContain(
+        'w związku z zakończeniem pracy „Podział nieruchomości” (Przykładowo) kwota do zapłaty to 3 000,00 zł',
+      );
+      expect(card).toContain(`konto: ${ACCOUNT}`);
+      expect(card).toContain(REVIEW);
+      expect(card).toContain('data-copy="sms-tekst"');
+      expect(card).toContain('600 100 200');
+    });
+
+    it('the full order card shows the message too while the order waits for payment, not earlier', async () => {
+      await post('/ustawienia/wiadomosc', { bankAccount: ACCOUNT, reviewLink: '', person: 'Anna' });
+      const id = await createOrder();
+      expect((await get(`/?zlecenie=${id}`)).body).not.toContain('Wiadomość do klienta (SMS)');
+      for (let step = 1; step <= STEPS_BEFORE_PAYMENT; step++) {
+        await post(`/zlecenia/${id}/kroki/${step}/zrobione`, { person: 'Anna' });
+      }
+      expect((await get(`/?zlecenie=${id}`)).body).toContain('data-copy="sms-tekst"');
+    });
+  });
+
+  describe('Ustawienia: dane do wiadomości SMS', () => {
+    it('settings show empty fields for the account and the review link', async () => {
+      const page = (await get('/ustawienia')).body;
+      expect(page).toContain('id="wiadomosc"');
+      expect(page).toMatch(/name="bankAccount"[^>]*value=""/);
+      expect(page).toMatch(/name="reviewLink"[^>]*value=""/);
+    });
+
+    it('saves the fields and shows who changed them', async () => {
+      const res = await post('/ustawienia/wiadomosc', {
+        bankAccount: '66105014451000009030216767',
+        reviewLink: '',
+        person: 'Piotr',
+      });
+      expect(res.statusCode).toBe(303);
+      expect(res.headers.location).toBe('/ustawienia#wiadomosc');
+      const page = (await get('/ustawienia')).body;
+      expect(page).toMatch(/name="bankAccount"[^>]*value="66 1050 1445 1000 0090 3021 6767"/);
+      expect(page).toContain('Piotr: Numer konta');
+    });
+
+    it('a wrong account number shows a readable error and keeps what was typed', async () => {
+      const res = await post('/ustawienia/wiadomosc', {
+        bankAccount: '12 3456',
+        reviewLink: '',
+        person: 'Anna',
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('Numer konta musi mieć 26 cyfr');
+      expect(res.body).toMatch(/name="bankAccount"[^>]*value="12 3456"/);
+    });
+  });
+
   it('undoing an entry that is no longer the newest shows a readable error', async () => {
     const id = await handOver();
     const older = undoAction((await get(`/?zlecenie=${id}`)).body);
