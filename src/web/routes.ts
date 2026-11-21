@@ -1,3 +1,6 @@
+import type { MessageSettingsService } from '../modules/settings/message-settings.js';
+import { paymentMessageBox } from './message-views.js';
+import { paymentText } from './unpaid-routes.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { BoardService } from '../modules/board/board-service.js';
 import type { OrderService, PeopleAssignment } from '../modules/orders/order-service.js';
@@ -40,6 +43,7 @@ export interface WebServices {
   stats: StatsService;
   today: () => LocalDate;
   settings: SettingsService;
+  messages: MessageSettingsService;
   daysOff: DaysOffRepository;
   workTypeAdmin: WorkTypeAdmin;
   pages: PageRenderer;
@@ -159,6 +163,15 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
       return renderSettings(reply, s, message(err));
     }
   });
+  app.post('/ustawienia/wiadomosc', (req, reply) => {
+    const form = req.body as Form;
+    try {
+      s.messages.update(form, form.person ?? '');
+      return reply.redirect('/ustawienia#wiadomosc', HTTP_SEE_OTHER);
+    } catch (err) {
+      return renderSettings(reply, s, message(err), null, form);
+    }
+  });
   app.post('/ustawienia/dni-wolne/:id/usun', (req, reply) => {
     s.daysOff.remove(Number((req.params as Form).id));
     return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
@@ -182,6 +195,7 @@ function renderSettings(
   s: WebServices,
   error: string | null,
   typed: Form | null = null,
+  typedMessage: Form | null = null,
 ) {
   const view = {
     values: typed ?? settingsFormValues(s.settings.get()),
@@ -189,6 +203,7 @@ function renderSettings(
     daysOff: s.daysOff.list(s.today()),
     workTypes: s.workTypes.findAll(),
     workTypeHistory: s.workTypeAdmin.history(),
+    message: { values: typedMessage ?? { ...s.messages.get() }, history: s.messages.history() },
   };
   return s.pages.send(
     reply,
@@ -275,6 +290,7 @@ function renderBoard(
       s.orders.history(orderId),
       s.people.list(),
       s.orders.undoableEntryIds(orderId),
+      active?.payment ? paymentMessageBox(paymentText(s, order), order.phone) : null,
     );
   }
   return s.pages.send(
