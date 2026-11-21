@@ -708,6 +708,32 @@ document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 });
+// Ustawienia: podświetlenie niezapisanych zmian, licznik i pytanie przeglądarki przy wyjściu bez zapisu.
+document.querySelectorAll('form[data-dirty-form]').forEach(function (form) {
+  var fields = form.querySelectorAll('input[name]');
+  var note = form.querySelector('.dirty-note'), counter = form.querySelector('.dirty-count');
+  var startDirty = form.getAttribute('data-dirty-form') === '1', submitting = false;
+  function changed(i) { return i.type === 'checkbox' ? i.checked !== i.defaultChecked : i.value !== i.defaultValue; }
+  function update() {
+    var n = 0;
+    fields.forEach(function (i) {
+      var c = changed(i);
+      if (i.closest('.setting')) i.closest('.setting').classList.toggle('dirty', c);
+      if (c) n++;
+    });
+    if (counter) counter.textContent = n > 0 ? ': ' + n : '';
+    if (note) note.hidden = n === 0 && !startDirty;
+    return n;
+  }
+  form.addEventListener('input', update);
+  form.addEventListener('change', update);
+  form.addEventListener('submit', function () { submitting = true; });
+  window.addEventListener('beforeunload', function (e) {
+    if (submitting || (update() === 0 && !startDirty)) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+});
 // „Kopiuj wiadomość”: kopiuje tekst SMS do schowka (niczego nie wysyła).
 document.querySelectorAll('[data-copy]').forEach(function (b) {
   b.addEventListener('click', function () {
@@ -867,6 +893,16 @@ td .assignee { display:flex; margin:4px 0 0; }
 .step-btn:hover { background:var(--green); border-color:var(--brand); }
 .setting input[type=number] { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; text-align:right; }
 .setting input[type=date], .setting input.text { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; }
+.setting .field-error, .setting .field-notice { grid-column:1 / -1; grid-row:auto; font-size:15px; font-weight:600; padding:6px 10px; border-radius:8px; margin-top:4px; }
+.setting .field-error { color:var(--red-ink); background:var(--red); } .setting .field-error::before { content:"⚠ "; }
+.setting .field-notice { color:var(--yellow-ink); background:var(--yellow); }
+.setting.has-error input[type=number] { border:2px solid var(--red-bar); }
+.setting.dirty { background:#fffbeb; box-shadow:inset 4px 0 0 var(--yellow-bar); padding-left:10px; }
+.save-box { flex-basis:100%; margin-top:14px; padding:12px 14px; border:2px solid var(--brand); border-radius:12px; background:var(--green); }
+.save-title { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0; font-size:18px; color:var(--green-ink); }
+.dirty-note { background:var(--yellow); color:var(--yellow-ink); border-radius:999px; padding:3px 12px; font-size:15px; font-weight:700; }
+.saved { background:var(--green); color:var(--green-ink); border:1px solid var(--green-bar); border-radius:10px; padding:10px 14px; font-weight:700; }
+.saved.none { background:#f3f4f6; color:var(--ink); border-color:var(--line); font-weight:600; }
 .setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
 /* Edytor rodzaju pracy. */
 .form-page.wide { max-width:1100px; }

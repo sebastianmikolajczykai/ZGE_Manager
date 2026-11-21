@@ -1,11 +1,19 @@
 import { html, type SafeHtml } from './html.js';
-import { fold, formatDate, numberStepper, personButtons } from './view-helpers.js';
+import {
+  countText,
+  fold,
+  formatDate,
+  numberStepper,
+  personButtonList,
+  personButtons,
+} from './view-helpers.js';
 import type { Person } from '../modules/people/people-repository.js';
 import {
   DEFAULT_APP_SETTINGS,
   SETTING_FIELDS,
   type AppSettings,
   type SettingField,
+  type SettingErrors,
   type SettingsHistoryEntry,
 } from '../modules/settings/settings-service.js';
 import type { DaysOff } from '../modules/settings/days-off-repository.js';
@@ -14,9 +22,20 @@ import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin
 import { workTypesSection } from './work-type-views.js';
 import { messageSettingsSection, type MessageSettingsView } from './message-views.js';
 
+/** Potwierdzenie po zapisie: ile pól się zmieniło i kto zapisał. */
+export interface SavedNote {
+  count: number;
+  person: string;
+}
+
 /** Co pokazać w formularzu: zapisane ustawienia albo to, co ktoś właśnie wpisał (przy błędzie). */
 export interface SettingsView {
   values: Record<string, string>;
+  /** Błąd przy konkretnym polu (zapis odrzucony). */
+  fieldErrors: SettingErrors;
+  /** Uwaga przy polu (zapis dozwolony), np. „Żółte przed limitem” ≥ limit kroku. */
+  fieldNotices: SettingErrors;
+  saved: SavedNote | null;
   history: SettingsHistoryEntry[];
   daysOff: DaysOff[];
   workTypes: WorkType[];
@@ -48,8 +67,8 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     </nav>
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <h3 id="kolory">Kolory i przypomnienia</h3>
-    <p><small>Liczymy tylko dni robocze (pn–pt) bez świąt. Zmiany działają od razu.</small></p>
-    ${personButtons('/ustawienia/progi', 'Zapisz', people, 'primary', settingFields(view.values))}
+    <p><small>Liczymy tylko dni robocze (pn–pt) bez świąt. Zmiany działają od razu po zapisaniu.</small></p>
+    ${savedNote(view.saved)} ${thresholdsForm(people, view)}
     <details class="undo">
       <summary class="button undo-toggle"><span aria-hidden="true">↺</span> Przywróć domyślne</summary>
       <p><small>${defaultsSummary()}</small></p>
@@ -107,11 +126,57 @@ function daysOffSection(daysOff: DaysOff[], people: Person[]): SafeHtml {
     ${personButtons('/ustawienia/dni-wolne', 'Dodaj dni wolne', people, 'secondary', fields)}`;
 }
 
-function settingFields(values: Record<string, string>): SafeHtml {
-  return html`${SETTING_FIELDS.map((field) => settingField(field, values[field.key] ?? ''))}`;
+/** Etykieta przycisków zapisu (także w data-label i w testach E2E). */
+export const SAVE_LABEL = '💾 Zapisz zmiany';
+
+/**
+ * Formularz progów. novalidate: sprawdza serwer i pokazuje komunikat po polsku przy polu
+ * (zamiast dymków przeglądarki). data-dirty-form: skrypt podświetla niezapisane zmiany.
+ */
+function thresholdsForm(people: Person[], view: SettingsView): SafeHtml {
+  if (people.length === 0) return html`<p class="error">Dodaj osoby w Ustawieniach.</p>`;
+  // Po odrzuconym zapisie wszystko w polach jest niezapisane od początku.
+  const unsaved = Object.keys(view.fieldErrors).length > 0 ? '1' : '0';
+  return html`<form
+    method="post"
+    action="/ustawienia/progi"
+    class="people settings-form"
+    data-dirty-form="${unsaved}"
+    novalidate
+  >
+    ${SETTING_FIELDS.map((field) =>
+      settingField(
+        field,
+        view.values[field.key] ?? '',
+        view.fieldErrors[field.key],
+        view.fieldNotices[field.key],
+      ),
+    )}
+    <div class="save-box">
+      <p class="save-title">
+        <strong>${SAVE_LABEL}</strong>
+        <span class="dirty-note" ${unsaved === '1' ? '' : 'hidden'}
+          >Niezapisane zmiany<span class="dirty-count"></span
+        ></span>
+      </p>
+      <p class="who-asks">Kto zapisuje? Kliknij swoje imię:</p>
+      <div class="people">${personButtonList(SAVE_LABEL, people, 'primary')}</div>
+    </div>
+  </form>`;
 }
 
-function settingField(field: SettingField, value: string): SafeHtml {
+function savedNote(saved: SavedNote | null): SafeHtml | string {
+  if (!saved) return '';
+  if (saved.count === 0) {
+    return html`<p class="saved none" role="status">
+      Nic nie zmieniono: wartości były takie same jak zapisane.
+    </p>`;
+  }
+  const changes = countText(saved.count, 'zmianę', 'zmiany', 'zmian');
+  return html`<p class="saved" role="status">✓ Zapisano ${changes} (${saved.person}). Działają od razu.</p>`;
+}
+
+function settingField(field: SettingField, value: string, error?: string, notice?: string): SafeHtml {
   const hint = field.hint ? html`<small>${field.hint}</small>` : '';
   if (field.type === 'switch') {
     return html`<label class="setting"
@@ -122,17 +187,25 @@ function settingField(field: SettingField, value: string): SafeHtml {
         ${value ? 'checked' : ''}
     /></label>`;
   }
+  const messageId = `msg-${field.key}`;
+  const invalid = error ? html` aria-invalid="true"` : '';
+  const describedBy = error || notice ? html` aria-describedby="${messageId}"` : '';
   const input = html`<input
     type="number"
     name="${field.key}"
     min="${field.min}"
     max="${field.max}"
     step="1"
-    required
     value="${value}"
+    ${invalid}${describedBy}
   />`;
-  return html`<label class="setting"
-    ><span>${field.label}</span>${hint}${numberStepper(field.label, input)}</label
+  const message = error
+    ? html`<small class="field-error" id="${messageId}">${error}</small>`
+    : notice
+      ? html`<small class="field-notice" id="${messageId}">${notice}</small>`
+      : '';
+  return html`<label class="setting${error ? ' has-error' : ''}"
+    ><span>${field.label}</span>${hint}${numberStepper(field.label, input)}${message}</label
   >`;
 }
 
