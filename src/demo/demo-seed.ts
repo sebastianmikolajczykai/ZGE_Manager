@@ -194,6 +194,7 @@ export function seedDemo(db: AppDatabase, today: LocalDate): void {
         pricePln: demo.price,
         note: null,
         measurementOn: demo.measurementAgo === null ? null : calendar.ago(demo.measurementAgo),
+        leadPerson: person(n),
       },
       person(n),
     );

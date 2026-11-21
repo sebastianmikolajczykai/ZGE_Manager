@@ -6,7 +6,7 @@ CREATE TABLE order_history_new (
   happened_at TEXT NOT NULL DEFAULT (datetime('now')),
   happened_on TEXT NOT NULL,
   person TEXT NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('created', 'step_done', 'checked', 'undone', 'payment_call', 'limit_changed', 'measurement_set')),
+  action TEXT NOT NULL CHECK (action IN ('created', 'step_done', 'checked', 'undone', 'payment_call', 'limit_changed', 'lead_changed', 'step_assigned', 'measurement_set')),
   step_position INTEGER,
   step_name TEXT,
   note TEXT,

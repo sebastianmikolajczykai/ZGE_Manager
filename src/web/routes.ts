@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { BoardService } from '../modules/board/board-service.js';
-import type { OrderService } from '../modules/orders/order-service.js';
+import type { OrderService, PeopleAssignment } from '../modules/orders/order-service.js';
 import type { OrderInput } from '../modules/orders/order-input.js';
 import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
@@ -10,6 +10,7 @@ import { boardPage, orderDetail, orderForm, parseBoardFilter, type OrderFormValu
 import { settingsFormValues, settingsPage } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
+import { monitorPage } from './monitor-views.js';
 import type { PaymentService } from '../modules/payments/payment-service.js';
 import type { StatsService } from '../modules/stats/stats-service.js';
 import { statsPage } from './stats-views.js';
@@ -54,7 +55,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   app.get('/', (req, reply) => {
     const query = req.query as Form;
     const id = Number(query.zlecenie);
-    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null, 200, query.kolor);
+    return renderBoard(reply, s, Number.isInteger(id) && id > 0 ? id : null, null, 200, query);
   });
 
   app.get('/zlecenia/nowe', (req, reply) => {
@@ -109,6 +110,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     s.orders.setMeasurementDate(o, f.measurementOn ?? '', who),
   );
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
+  orderAction('/zlecenia/:id/osoby', (o, _p, who, f) => s.orders.assignPeople(o, toAssignment(f), who));
   registerHistoryUndo(app, s);
 
   app.get('/statystyki', (_req, reply) =>
@@ -165,6 +167,13 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error));
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
+
+  // Widok na monitor (styl D): osobna strona bez menu, duże kafle, samoodświeżanie.
+  app.get('/monitor', (_req, reply) =>
+    reply
+      .type('text/html; charset=utf-8')
+      .send(monitorPage(s.board.rows(), s.pages.counts(), s.pages.refreshSeconds())),
+  );
 }
 
 /** Ekran Ustawień; przy błędzie pokazuje wpisane wartości, żeby nie trzeba było ich wpisywać od nowa. */
@@ -233,9 +242,14 @@ function renderBoard(
   orderId: number | null,
   error: string | null,
   status = 200,
-  colour?: string,
+  query: Form = {},
 ) {
-  const options = { counts: s.pages.counts(), filter: parseBoardFilter(colour) };
+  const options = {
+    counts: s.pages.counts(),
+    filter: parseBoardFilter(query.kolor),
+    person: optionalField(query, 'osoba'),
+    people: s.people.list(),
+  };
   let detail = null;
   if (orderId !== null) {
     const order = s.orders.get(orderId);
@@ -287,5 +301,16 @@ function toOrderInput(f: Form): OrderInput {
     pricePln: priceField(f),
     note: opt('note'),
     measurementOn: opt('measurementOn'),
+    leadPerson: opt('leadPerson'),
   };
+}
+
+/** Pola „Osoby w zleceniu”: leadPerson oraz step_<numer kroku>. */
+function toAssignment(f: Form): PeopleAssignment {
+  const steps: Record<number, string> = {};
+  for (const [key, value] of Object.entries(f)) {
+    const match = /^step_(\d+)$/.exec(key);
+    if (match) steps[Number(match[1])] = value;
+  }
+  return { leadPerson: f.leadPerson ?? '', steps };
 }

@@ -1,9 +1,11 @@
 import { html, SafeHtml } from './html.js';
 import { googleCalendarLink } from '../modules/calendar/google-calendar-link.js';
 import {
+  avatar,
   fold,
   formatDate,
   formatPrice,
+  numberStepper,
   historyList,
   type HistoryUndo,
   personButtons,
@@ -111,6 +113,9 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
       ${link('/niezaplacone', '💰', 'Niezapłacone', counts.unpaidToRemind)}
       ${link('/statystyki', '📊', 'Statystyki')} ${link('/ustawienia', '⚙', 'Ustawienia')}
     </nav>
+    <a class="monitor-link" href="/monitor" target="_blank" rel="noopener"
+      ><span class="ic" aria-hidden="true">📺</span>Widok na monitor</a
+    >
     <p class="side-foot">Lista odświeża się co ${refreshSeconds} s</p>
   </aside>`;
 }
@@ -118,6 +123,20 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
 export interface BoardOptions {
   counts: NavCounts;
   filter: BoardFilter;
+  /** Filtr „Moje”: tylko zlecenia, w których bieżący krok należy do tej osoby (null = wszyscy). */
+  person?: string | null;
+  /** Osoby do wyboru w filtrze „Moje”. */
+  people?: Person[];
+}
+
+/** Adres Tablicy z zachowaniem filtrów (kolor, osoba) i ewentualnie otwartym zleceniem. */
+function boardUrl(params: { zlecenie?: number; kolor?: BoardFilter; osoba?: string | null }): string {
+  const query = new URLSearchParams();
+  if (params.zlecenie) query.set('zlecenie', String(params.zlecenie));
+  if (params.kolor) query.set('kolor', params.kolor);
+  if (params.osoba) query.set('osoba', params.osoba);
+  const text = query.toString();
+  return text ? `/?${text}` : '/';
 }
 
 const TILE_LABEL: Record<Colour, string> = {
@@ -133,15 +152,11 @@ export function boardPage(
   selectedId: number | null = null,
   options: BoardOptions = { counts: NO_COUNTS, filter: null },
 ): SafeHtml {
-  const shown = rows.filter((r) => matchesFilter(r, options.filter));
-  const emptyText = options.filter
-    ? options.filter === NO_DATE_FILTER
-      ? 'Wszystkie zlecenia mają datę pomiaru.'
-      : 'Brak zleceń w tym kolorze.'
-    : 'Brak aktywnych zleceń. Dodaj pierwsze przyciskiem „+ Dodaj zlecenie”.';
+  const person = options.person ?? null;
+  const { mine, shown } = filterRows(rows, options.filter, person);
   return html` ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <div class="page-head"><h1>Tablica zleceń</h1></div>
-    ${boardTiles(rows, options)}
+    ${boardTiles(mine, options)}
     <div class="split">
       <section class="board" aria-label="Lista zleceń">
         <div class="toolbar">
@@ -152,20 +167,63 @@ export function boardPage(
             aria-label="Szukaj"
             autocomplete="off"
           />
-          ${options.filter ? html`<a class="filter" href="/">Pokaż wszystkie (${rows.length})</a>` : ''}
+          ${personPicker(options.people ?? [], person)}
+          ${
+            options.filter
+              ? html`<a class="filter" href="${boardUrl({ osoba: person })}"
+                  >Pokaż wszystkie (${mine.length})</a
+                >`
+              : ''
+          }
         </div>
-        ${shown.length === 0 ? html`<p class="empty">${emptyText}</p>` : boardTable(shown, selectedId, options.filter)}
+        ${
+          shown.length === 0
+            ? html`<p class="empty">${emptyText(options.filter, person)}</p>`
+            : boardTable(shown, selectedId, options.filter, person)
+        }
         <p class="empty" id="brak-wynikow" hidden>Nic nie pasuje do wyszukiwania.</p>
       </section>
       ${detail ?? html`<section class="detail placeholder" aria-label="Szczegóły zlecenia"><p>Kliknij klienta na liście, żeby zobaczyć etap i co dalej.</p></section>`}
     </div>`;
 }
 
+/** Filtry Tablicy: najpierw osoba („Moje”, liczą się z tego kafelki), potem kolor. */
+function filterRows(rows: BoardRow[], filter: BoardFilter, person: string | null) {
+  const mine = person ? rows.filter((r) => r.owner === person) : rows;
+  const shown = mine.filter((r) => matchesFilter(r, filter));
+  return { mine, shown };
+}
+
+/** Napis przy pustej liście: zależy od wybranego filtra (kolor, osoba). */
+function emptyText(filter: BoardFilter, person: string | null): string {
+  if (filter === NO_DATE_FILTER) return 'Wszystkie zlecenia mają datę pomiaru.';
+  if (filter) return 'Brak zleceń w tym kolorze.';
+  if (person) return `${person} nie ma teraz żadnego kroku do zrobienia.`;
+  return 'Brak aktywnych zleceń. Dodaj pierwsze przyciskiem „+ Dodaj zlecenie”.';
+}
+
+/**
+ * Filtr „Moje”: wybór osoby. Program nie ma logowania, więc przeglądarka danego komputera
+ * zapamiętuje wybraną osobę (skrypt w layout) i podpowiada przycisk „Moje”.
+ */
+function personPicker(people: Person[], person: string | null): SafeHtml {
+  if (people.length === 0) return html``;
+  return html`<a class="filter moje" id="moje" href="/" hidden>👤 Moje</a>
+    <select id="osoba" aria-label="Pokaż zlecenia osoby">
+      <option value="">👥 Wszyscy</option>
+      ${people.map(
+        (p) => html`<option value="${p.name}" ${p.name === person ? 'selected' : ''}>👤 ${p.name}</option>`,
+      )}
+    </select>`;
+}
+
 /** Kafelki na górze Tablicy: liczba zleceń w każdym kolorze (klik = filtr) oraz sprawy z innych zakładek. */
 function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
   const colourTile = (c: Colour) => {
     const count = rows.filter((r) => r.urgency.colour === c).length;
-    return html`<a class="tile ${c}${options.filter === c ? ' on' : ''}" href="/?kolor=${c}"
+    return html`<a
+      class="tile ${c}${options.filter === c ? ' on' : ''}"
+      href="${boardUrl({ kolor: c, osoba: options.person ?? null })}"
       ><span class="ti" aria-hidden="true">${STATUS_ICON[c]}</span><b>${count}</b
       ><span>${TILE_LABEL[c]}</span></a
     >`;
@@ -175,7 +233,7 @@ function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
     noDate > 0
       ? html`<a
           class="tile no-date${options.filter === NO_DATE_FILTER ? ' on' : ''}"
-          href="/?kolor=${NO_DATE_FILTER}"
+          href="${boardUrl({ kolor: NO_DATE_FILTER, osoba: options.person ?? null })}"
           ><span class="ti" aria-hidden="true">📅</span><b>${noDate}</b><span>bez daty pomiaru</span></a
         >`
       : '';
@@ -192,8 +250,13 @@ function boardTiles(rows: BoardRow[], options: BoardOptions): SafeHtml {
   </div>`;
 }
 
-function boardTable(rows: BoardRow[], selectedId: number | null, filter: BoardFilter): SafeHtml {
-  const link = (id: number) => (filter ? `/?zlecenie=${id}&kolor=${filter}` : `/?zlecenie=${id}`);
+function boardTable(
+  rows: BoardRow[],
+  selectedId: number | null,
+  filter: BoardFilter,
+  person: string | null,
+): SafeHtml {
+  const link = (id: number) => boardUrl({ zlecenie: id, kolor: filter, osoba: person });
   return html`<table data-search-list>
     <thead>
       <tr>
@@ -218,7 +281,7 @@ function boardTable(rows: BoardRow[], selectedId: number | null, filter: BoardFi
             <td>${r.town}${r.plot ? html`<small>dz. ${r.plot}</small>` : ''}</td>
             <td class="step-cell">
               ${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}
-              ${r.measurementMissing ? NO_DATE_LABEL : ''}
+              ${r.owner ? assigneeTag(r.owner) : ''} ${r.measurementMissing ? NO_DATE_LABEL : ''}
             </td>
             <td class="num">
               <b>${r.daysOnStep}</b
@@ -260,6 +323,8 @@ export function orderDetail(
       <dd>${order.town}${order.plot ? html`, dz. ${order.plot}` : ''}</dd>
       <dt>Rodzaj pracy</dt>
       <dd>${workTypeName}</dd>
+      <dt>Prowadzi</dt>
+      <dd>${leadFact(order.leadPerson)}</dd>
       ${
         order.office
           ? html`<dt>Gmina / urząd</dt>
@@ -279,7 +344,7 @@ export function orderDetail(
       }
     </dl>
     <h3>Kroki</h3>
-    ${stepsSection(order, people, urgency)}
+    ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
     ${historySection(history, orderUndo(order.id, undoableId, people))}
   </section>`;
 }
@@ -385,7 +450,7 @@ function stepItem(order: Order, step: OrderStep, people: Person[], urgency: Urge
   return html`<li value="${step.position}" class="step ${step.status}">
     ${active ? html`<span class="now-label">CO TERAZ · krok ${step.position} z ${order.steps.length}</span>` : ''}
     <span class="dot" aria-hidden="true">${step.status === 'done' ? '✓' : step.position}</span
-    ><span class="name">${step.name}</span>
+    ><span class="name">${step.name}</span>${step.assignee ? assigneeTag(step.assignee) : ''}
     ${stepMeta(step, active ? urgency : null)}${active ? stepActions(order, step, people) : ''}
   </li>`;
 }
@@ -417,12 +482,71 @@ function stepActions(order: Order, step: OrderStep, people: Person[]): SafeHtml 
   </div>`;
 }
 
+function leadFact(lead: string | null): SafeHtml {
+  return lead ? assigneeTag(lead) : html`<small>nikt (ustaw w „Osoby w zleceniu”)</small>`;
+}
+
+/** Kółko i imię osoby, do której należy zlecenie lub krok. */
+function assigneeTag(name: string): SafeHtml {
+  return html`<span class="assignee">${avatar(name)} ${name}</span>`;
+}
+
+/**
+ * „Osoby w zleceniu”: prowadzący i osoby kroków w jednym formularzu (można zaplanować z góry
+ * i zmieniać w trakcie). Zrobionych kroków nie ma, krok bez osoby należy do prowadzącego.
+ */
+function assignForm(order: Order, people: Person[]): SafeHtml {
+  if (order.status !== 'active') return html``;
+  const open = order.steps.filter((st) => st.status !== 'done');
+  const fields = html`<label class="setting"
+      ><span>Prowadzi zlecenie</span
+      >${personSelect('leadPerson', order.leadPerson, people, '— nikt —', 'Prowadzi zlecenie')}</label
+    >
+    ${open.map(
+      (st) =>
+        html`<label class="setting"
+          ><span>${st.position}. ${st.name}</span
+          >${personSelect(`step_${st.position}`, st.assignee, people, '— prowadzący —', `Osoba do kroku ${st.position}`)}</label
+        >`,
+    )}`;
+  return html`<details class="assign">
+    <summary>👥 Osoby w zleceniu (kto prowadzi, kto robi kroki)</summary>
+    ${personButtons(`/zlecenia/${order.id}/osoby`, 'Zapisz osoby', people, 'secondary', fields)}
+  </details>`;
+}
+
+/** Lista osób do wyboru; osoba usunięta z Ustawień, ale wciąż przypisana, zostaje na liście. */
+function personSelect(
+  name: string,
+  current: string | null,
+  people: Person[],
+  emptyLabel: string,
+  label: string,
+): SafeHtml {
+  const names = people.map((p) => p.name);
+  if (current && !names.includes(current)) names.push(current);
+  return html`<select name="${name}" aria-label="${label}">
+    <option value="">${emptyLabel}</option>
+    ${names.map((n) => html`<option value="${n}" ${n === current ? 'selected' : ''}>${n}</option>`)}
+  </select>`;
+}
+
 /** Zmiana limitu tylko w tym zleceniu, np. gdy urząd zapowiedział dłuższy termin. */
 function limitChangeForm(orderId: number, step: OrderStep, people: Person[]): SafeHtml {
   const field = html`<label class="setting"
-    ><span>Nowy limit</span><small>dni roboczych od rozpoczęcia kroku, tylko w tym zleceniu</small
-    ><input type="number" name="limitDays" min="1" max="365" step="1" value="${step.limitDays ?? ''}"
-  /></label>`;
+    ><span>Nowy limit</span
+    ><small>dni roboczych od rozpoczęcia kroku, tylko w tym zleceniu</small>${numberStepper(
+      'Nowy limit',
+      html`<input
+        type="number"
+        name="limitDays"
+        min="1"
+        max="365"
+        step="1"
+        value="${step.limitDays ?? ''}"
+      />`,
+    )}</label
+  >`;
   return html`<details class="limit-change">
     <summary>Zmień limit tego kroku</summary>
     ${personButtons(`/zlecenia/${orderId}/kroki/${step.position}/limit`, 'Zmień limit', people, 'secondary', field)}
@@ -446,6 +570,8 @@ const HISTORY_WORDS: Record<HistoryEntry['action'], (step: SafeHtml, note: SafeH
   undone: (step, note) => html`cofnięcie${step}${note}`,
   payment_call: (_step, note) => html`przypomnienie o zapłacie${note}`,
   limit_changed: (step, note) => html`zmiana limitu${step}${note}`,
+  lead_changed: (_step, note) => html`osoba prowadząca${note}`,
+  step_assigned: (step, note) => html`osoba do kroku${step}${note}`,
   measurement_set: (_step, note) => html`data pomiaru${note}`,
 };
 
@@ -497,6 +623,18 @@ export function orderForm(
       /></label>
       <label>Notatka <small>(opcjonalnie)</small> <textarea name="note">${v('note')}</textarea></label>
       <label
+        >Prowadzi zlecenie <small>(opcjonalnie; kroki można przypisać później na karcie)</small>
+        <select name="leadPerson">
+          <option value="">— nikt —</option>
+          ${people.map(
+            (p) =>
+              html`<option value="${p.name}" ${v('leadPerson') === p.name ? 'selected' : ''}>
+                ${p.name}
+              </option>`,
+          )}
+        </select></label
+      >
+      <label
         >Kto przyjął
         <select name="person">
           ${people.map((p) => html`<option ${v('person') === p.name ? 'selected' : ''}>${p.name}</option>`)}
@@ -531,6 +669,34 @@ if (search) search.addEventListener('input', function () {
   });
   var none = document.getElementById('brak-wynikow');
   if (none) none.hidden = any || !document.querySelector('[data-search-list]');
+});
+// Filtr „Moje”: bez logowania. Wybrana osoba jest zapamiętana w tej przeglądarce (tylko na tym komputerze).
+var picker = document.getElementById('osoba');
+if (picker) {
+  picker.addEventListener('change', function () {
+    try { if (picker.value) localStorage.setItem('zge:ja', picker.value); } catch (e) {}
+    location.href = picker.value ? '/?osoba=' + encodeURIComponent(picker.value) : '/';
+  });
+  var me = null;
+  try { me = localStorage.getItem('zge:ja'); } catch (e) {}
+  var mine = document.getElementById('moje');
+  var known = me && Array.prototype.some.call(picker.options, function (o) { return o.value === me; });
+  if (mine && known && picker.value !== me) {
+    mine.href = '/?osoba=' + encodeURIComponent(me);
+    mine.textContent = '👤 Moje (' + me + ')';
+    mine.hidden = false;
+  }
+}
+// Przyciski − / + przy polach liczbowych: zmiana o 1 w granicach min–max pola (puste pole: zaczyna od min).
+document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var input = b.parentNode.querySelector('input');
+    var min = parseInt(input.getAttribute('min') || '1', 10), max = parseInt(input.getAttribute('max') || '365', 10);
+    var now = parseInt(input.value, 10);
+    var next = isNaN(now) ? min : now + parseInt(b.getAttribute('data-step'), 10);
+    input.value = String(Math.min(max, Math.max(min, next)));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 });
 // Okienko „Czy na pewno?”: kliknięcie osoby na karcie trzeba potwierdzić drugim kliknięciem „Tak, zapisz”.
 var ask = document.getElementById('potwierdz');
@@ -578,7 +744,9 @@ body { margin:0; font:17px/1.4 "Segoe UI", Inter, system-ui, sans-serif; color:v
 .side nav a.add { background:var(--add); color:var(--ink); justify-content:center; margin-bottom:12px; font-weight:700; box-shadow:0 4px 10px rgba(0,0,0,.2); }
 .side nav a.add:hover { background:#fde047; }
 .ic { width:22px; text-align:center; } .badge { margin-left:auto; background:#ef4444; color:#fff; border-radius:999px; font-size:13px; padding:1px 8px; font-weight:700; }
-.side-foot { margin-top:auto; font-size:13px; color:#86efac; padding:0 6px; }
+.side .monitor-link { margin-top:auto; display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; color:var(--side-ink); text-decoration:none; font-size:15px; border:1px solid #1f6f43; }
+.side .monitor-link:hover { background:#16512f; }
+.side-foot { margin-top:8px; font-size:13px; color:#86efac; padding:0 6px; }
 main { padding:18px 22px; min-width:0; }
 .page-head h1, .form-page h2 { margin:0 0 14px; font-size:24px; }
 /* Kafelki-liczniki */
@@ -665,6 +833,16 @@ details.fold > summary:hover { color:var(--brand); }
 form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
 .setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
 .setting input { grid-column:2; grid-row:1 / span 2; }
+.assignee { display:inline-flex; align-items:center; gap:4px; margin-left:8px; font-size:14px; font-weight:600; color:var(--muted); white-space:nowrap; }
+td .assignee { display:flex; margin:4px 0 0; }
+.assign { margin-top:12px; } .assign > summary { cursor:pointer; font-weight:600; color:var(--brand-dark); }
+.setting select { grid-column:2; grid-row:1 / span 2; font:inherit; padding:6px 8px; border:1px solid #d1d5db; border-radius:10px; width:100%; }
+#osoba { font:inherit; padding:7px 10px; border:1px solid #d1d5db; border-radius:10px; background:#fff; }
+.setting .stepper { grid-column:2; grid-row:1 / span 2; }
+.stepper { display:flex; align-items:stretch; gap:4px; }
+.stepper input { min-width:0; flex:1; } .stepper .minus { order:-1; }
+.step-btn { flex:none; width:40px; padding:0; border:1px solid #d1d5db; border-radius:10px; background:#fff; font-size:22px; font-weight:700; line-height:1; color:var(--ink); }
+.step-btn:hover { background:var(--green); border-color:var(--brand); }
 .setting input[type=number] { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; text-align:right; }
 .setting input[type=date], .setting input.text { font:inherit; padding:7px 10px; width:100%; border:1px solid #d1d5db; border-radius:10px; }
 .setting input[type=checkbox] { width:24px; height:24px; justify-self:end; accent-color:var(--brand); }
@@ -673,7 +851,7 @@ form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 
 .default-submit { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
 .wt-name { display:block; font-weight:600; margin:10px 0; } .wt-name input { display:block; width:100%; font:inherit; padding:8px; margin-top:4px; border:1px solid #d1d5db; border-radius:10px; }
 .steps-editor { box-shadow:none; } .steps-editor input, .steps-editor select { font:inherit; padding:6px; border:1px solid #d1d5db; border-radius:8px; width:100%; }
-.steps-editor input.limit { width:80px; text-align:right; } .steps-editor select { width:auto; } .steps-editor td { vertical-align:middle; padding:6px 8px; background:#fff !important; } .steps-editor .center { text-align:center; }
+.steps-editor input.limit { width:64px; text-align:right; border:1px solid #d1d5db; border-radius:10px; padding:6px 8px; font:inherit; } .steps-editor .step-btn { width:34px; } .steps-editor select { width:auto; } .steps-editor td { vertical-align:middle; padding:6px 8px; background:#fff !important; } .steps-editor .center { text-align:center; }
 .steps-editor input[type=radio] { width:22px; height:22px; accent-color:var(--brand); }
 .steps-editor tbody tr { cursor:default; }
 .order-buttons { white-space:nowrap; } .order-buttons button { background:#eef0f3; margin-right:2px; } .order-buttons button.danger { background:var(--red); }
@@ -736,7 +914,12 @@ dialog#potwierdz::backdrop { background:rgba(15,61,36,.55); }
 const TRUSTED_STYLES = new SafeHtml(STYLES);
 /** Skrypt strony; jedyna zmienna to liczba sekund (sprawdzona liczba całkowita z Ustawień). */
 function trustedScript(refreshSeconds: number): SafeHtml {
+  return new SafeHtml(`var REFRESH_MS = ${refreshMs(refreshSeconds)};${PAGE_SCRIPT}`);
+}
+
+/** Sekundy z Ustawień → milisekundy dla skryptu; tylko dodatnia liczba całkowita trafia do strony. */
+export function refreshMs(refreshSeconds: number): number {
   if (!Number.isInteger(refreshSeconds) || refreshSeconds <= 0)
     throw new Error('Nieprawidłowy czas odświeżania');
-  return new SafeHtml(`var REFRESH_MS = ${refreshSeconds * MS_PER_SECOND};${PAGE_SCRIPT}`);
+  return refreshSeconds * MS_PER_SECOND;
 }

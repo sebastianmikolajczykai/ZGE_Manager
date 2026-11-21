@@ -16,6 +16,7 @@ function step(kind: OrderStep['kind'], status: OrderStep['status']): OrderStep {
     doneBy: null,
     lastCheckedOn: null,
     lastCheckedBy: null,
+    assignee: null,
   };
 }
 

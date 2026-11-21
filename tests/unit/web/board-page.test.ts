@@ -17,6 +17,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     lastPerson: 'Bartek',
     pricePln: 2500,
     measurementMissing: false,
+    owner: null,
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
   };
@@ -131,5 +132,66 @@ describe('Tablica: zlecenia bez daty pomiaru', () => {
     expect(parseBoardFilter('bez-daty')).toBe('bez-daty');
     expect(parseBoardFilter('red')).toBe('red');
     expect(parseBoardFilter('cos')).toBeNull();
+  });
+});
+
+describe('Tablica: filtr „Moje” (bez logowania)', () => {
+  const PEOPLE = [
+    { id: 1, name: 'Łukasz' },
+    { id: 2, name: 'Bartek' },
+  ];
+  const OWNED = [
+    row(1, 'red', { owner: 'Bartek' }),
+    row(2, 'yellow', { owner: 'Łukasz' }),
+    row(3, 'green', { owner: 'Bartek' }),
+    row(4, 'green', { owner: null }),
+  ];
+  const mine = boardPage(OWNED, null, null, null, {
+    counts: COUNTS,
+    filter: null,
+    person: 'Bartek',
+    people: PEOPLE,
+  }).value;
+
+  it('shows only orders whose current step belongs to the chosen person', () => {
+    expect(mine).toContain('Klient 1 (przykład)');
+    expect(mine).toContain('Klient 3 (przykład)');
+    expect(mine).not.toContain('Klient 2 (przykład)');
+    expect(mine).not.toContain('Klient 4 (przykład)');
+  });
+
+  it('the tiles count only that person’s orders and keep the person when clicked', () => {
+    expect(tile(mine, 'red')).toMatch(/<b>1<\/b\s*>/);
+    expect(tile(mine, 'yellow')).toMatch(/<b>0<\/b\s*>/);
+    expect(tile(mine, 'red')).toContain('href="/?kolor=red&amp;osoba=Bartek"');
+  });
+
+  it('keeps the person when an order is opened', () => {
+    expect(mine).toContain('href="/?zlecenie=1&amp;osoba=Bartek"');
+  });
+
+  it('has a person picker with "all" and each person, the chosen one selected', () => {
+    const picker = mine.slice(
+      mine.indexOf('<select id="osoba"'),
+      mine.indexOf('</select>', mine.indexOf('<select id="osoba"')),
+    );
+    expect(picker).toContain('aria-label="Pokaż zlecenia osoby"');
+    expect(picker).toMatch(/<option value="">[^<]*Wszyscy/);
+    expect(picker).toMatch(/<option value="Bartek" selected>/);
+    expect(picker).toMatch(/<option value="Łukasz"\s*>/);
+  });
+
+  it('says so when the person has nothing on the board', () => {
+    const empty = boardPage([row(4, 'green')], null, null, null, {
+      counts: COUNTS,
+      filter: null,
+      person: 'Łukasz',
+      people: PEOPLE,
+    }).value;
+    expect(empty).toContain('Łukasz nie ma teraz żadnego kroku do zrobienia.');
+  });
+
+  it('shows the owner of the current step in the list', () => {
+    expect(mine).toMatch(/class="assignee"[\s\S]*Bartek/);
   });
 });

@@ -180,6 +180,36 @@ describe('OrderService: cofanie wpisu z historii', () => {
     expect(history.filter((h) => h.action === 'step_done').every((h) => h.reverted)).toBe(true);
     expect(service.undoableEntryId(id)).toBeNull();
   });
+  describe('osoby w zleceniu', () => {
+    it('undoes a change of the lead person: the previous person leads again', () => {
+      service.assignPeople(id, { leadPerson: PERSON, steps: {} }, PERSON);
+      service.assignPeople(id, { leadPerson: OTHER, steps: {} }, PERSON);
+      service.undoEntry(id, latestId(), OTHER);
+      expect(order().leadPerson).toBe(PERSON);
+      expect(service.history(id).at(-1)).toMatchObject({
+        action: 'undone',
+        person: OTHER,
+        note: `osoba prowadząca: ${PERSON} → ${OTHER}`,
+      });
+    });
+
+    it('undoes a person planned for a step not done yet', () => {
+      service.assignPeople(id, { leadPerson: '', steps: { 3: OTHER } }, PERSON);
+      service.undoEntry(id, latestId(), PERSON);
+      expect(order().steps[2]?.assignee).toBeNull();
+    });
+
+    it('goes in order: "zrobione" on that step is undone first, then the person of the step', () => {
+      service.assignPeople(id, { leadPerson: '', steps: { 1: OTHER } }, PERSON);
+      const assigned = entryId(service.history(id).at(-1));
+      service.completeStep(id, 1, OTHER);
+      expect(service.undoableEntryId(id)).not.toBe(assigned);
+      service.undoEntry(id, latestId(), PERSON);
+      expect(service.undoableEntryId(id)).toBe(assigned);
+      service.undoEntry(id, assigned, PERSON);
+      expect(order().steps[0]?.assignee).toBeNull();
+    });
+  });
 });
 
 describe('OrderService: usuwanie zlecenia przy cofnięciu przyjęcia oferty', () => {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AppDatabase } from '../../../src/db.js';
 import { WorkTypeRepository } from '../../../src/modules/work-types/work-type-repository.js';
-import { OrderService } from '../../../src/modules/orders/order-service.js';
+import { currentOwner, OrderService } from '../../../src/modules/orders/order-service.js';
 import type { OrderInput } from '../../../src/modules/orders/order-input.js';
 
 const PERSON = 'Osoba A';
@@ -224,6 +224,69 @@ describe('OrderService', () => {
       service.completeStep(id, 1, PERSON);
       expect(() => service.changeStepLimit(id, 2, '5', PERSON)).toThrow(/nie ma limitu/);
       expect(() => service.changeStepLimit(id, 2, '5', ' ')).toThrow(/Wybierz/);
+    });
+  });
+
+  describe('osoba prowadząca i osoby przypisane do kroków', () => {
+    const ownerOf = (id: number) => {
+      const order = service.get(id);
+      if (!order) throw new Error(`brak zlecenia ${id}`);
+      return currentOwner(order);
+    };
+
+    it('a new order can have a lead person (optional, none by default)', () => {
+      const withLead = service.create({ ...input(), leadPerson: OTHER }, PERSON);
+      const without = service.create(input(), PERSON);
+      expect(service.get(withLead)?.leadPerson).toBe(OTHER);
+      expect(service.get(without)?.leadPerson).toBeNull();
+      expect(service.get(without)?.steps.every((st) => st.assignee === null)).toBe(true);
+    });
+
+    it('the current step belongs to its assigned person, otherwise to the lead person', () => {
+      const id = service.create({ ...input(), leadPerson: PERSON }, PERSON);
+      expect(ownerOf(id)).toBe(PERSON);
+      service.assignPeople(id, { leadPerson: PERSON, steps: { 1: OTHER } }, PERSON);
+      expect(ownerOf(id)).toBe(OTHER);
+      service.completeStep(id, 1, OTHER);
+      expect(ownerOf(id)).toBe(PERSON);
+    });
+
+    it('nobody owns an order without a lead person and without an assigned step', () => {
+      expect(ownerOf(service.create(input(), PERSON))).toBeNull();
+    });
+
+    it('people can be planned ahead for later steps and changed during the work', () => {
+      const id = service.create(input(), PERSON);
+      service.assignPeople(id, { leadPerson: '', steps: { 2: PERSON, 3: OTHER } }, PERSON);
+      service.assignPeople(id, { leadPerson: '', steps: { 2: PERSON, 3: '' } }, OTHER);
+      expect(service.get(id)?.steps.map((st) => st.assignee)).toEqual([null, PERSON, null]);
+    });
+
+    it('logs only what changed: who changed the lead person or a step, from whom to whom', () => {
+      const id = service.create(input(), PERSON);
+      service.assignPeople(id, { leadPerson: OTHER, steps: { 1: '', 3: PERSON } }, PERSON);
+      const log = service.history(id).slice(1);
+      expect(log).toHaveLength(2);
+      expect(log[0]).toMatchObject({ person: PERSON, action: 'lead_changed', note: `brak → ${OTHER}` });
+      expect(log[1]).toMatchObject({
+        person: PERSON,
+        action: 'step_assigned',
+        stepName: 'Ostatni',
+        note: `brak → ${PERSON}`,
+      });
+      service.assignPeople(id, { leadPerson: OTHER, steps: { 3: PERSON } }, PERSON);
+      expect(service.history(id)).toHaveLength(3);
+    });
+
+    it('does not change steps that are already done, and needs to know who changes it', () => {
+      const id = service.create(input(), PERSON);
+      service.completeStep(id, 1, PERSON);
+      service.assignPeople(id, { leadPerson: '', steps: { 1: OTHER } }, PERSON);
+      expect(service.get(id)?.steps[0]?.assignee).toBeNull();
+      expect(() => service.assignPeople(id, { leadPerson: '', steps: {} }, ' ')).toThrow(/Wybierz/);
+      expect(() => service.assignPeople(99, { leadPerson: '', steps: {} }, PERSON)).toThrow(
+        /Nie ma zlecenia/,
+      );
     });
   });
 });

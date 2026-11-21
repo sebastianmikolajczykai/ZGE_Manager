@@ -1,7 +1,7 @@
 import type { AppDatabase } from '../../db.js';
 import type { LocalDate } from '../urgency/day-counter.js';
 import { UrgencyRules, type Urgency } from '../urgency/urgency-rules.js';
-import type { Order, OrderService, OrderStep } from '../orders/order-service.js';
+import { currentOwner, type Order, type OrderService, type OrderStep } from '../orders/order-service.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
 import { isWaitingForMeasurementDate } from '../orders/measurement.js';
 
@@ -20,6 +20,8 @@ export interface BoardRow {
   pricePln: number | null;
   /** Zlecenie czeka na termin pomiaru (data do uzupełnienia). */
   measurementMissing: boolean;
+  /** Do kogo należy bieżący krok (filtr „Moje”); null = nikt nie przypisany. */
+  owner: string | null;
   urgency: Urgency;
 }
 
@@ -84,6 +86,7 @@ export class BoardService {
       lastPerson: this.lastPerson(order.id),
       pricePln: order.pricePln,
       measurementMissing: isWaitingForMeasurementDate(order),
+      owner: currentOwner(order),
       urgency,
     };
     return { row, sortKey: { urgency, waitingSince: order.receivedOn } };
