@@ -2,11 +2,12 @@ import type { AppDatabase } from '../../db.js';
 import type { LocalDate } from '../urgency/day-counter.js';
 import type { StepKind } from '../work-types/work-type-definition.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
-import { parseOrderInput, type OrderInput } from './order-input.js';
+import { parseMeasurementDate, parseOrderInput, type OrderInput } from './order-input.js';
 import { optional, requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
-export type HistoryAction = 'created' | 'step_done' | 'checked' | 'undone' | 'payment_call' | 'limit_changed';
+export type HistoryAction =
+  'created' | 'step_done' | 'checked' | 'undone' | 'payment_call' | 'limit_changed' | 'measurement_set';
 
 export interface OrderStep {
   position: number;
@@ -53,7 +54,10 @@ const UNDO_LABEL: Record<UndoableAction, string> = {
   checked: 'sprawdzone dziś',
   payment_call: 'przypomnienie o zapłacie',
   limit_changed: 'zmiana limitu',
+  measurement_set: 'data pomiaru',
 };
+/** Cofnięcia, przy których w historii widać też, co się zmieniało (np. „2 → 6 dni”). */
+const UNDO_WITH_NOTE: readonly UndoableAction[] = ['limit_changed', 'measurement_set'];
 type UndoableAction = Exclude<HistoryAction, 'created' | 'undone'>;
 
 /** Poprzedni stan kroku zapisany przy wpisie, żeby dało się go przywrócić. */
@@ -65,6 +69,10 @@ interface LimitUndoData {
   limitDays: number | null;
   provisional: boolean;
 }
+interface MeasurementUndoData {
+  measurementOn: LocalDate | null;
+}
+type UndoData = CheckUndoData | LimitUndoData | MeasurementUndoData;
 
 const GROSZE_PER_PLN = 100;
 
@@ -86,11 +94,7 @@ export class OrderService {
     const workType = this.workTypes.findById(input.workTypeId);
     if (!workType) throw new Error(`Nieznany rodzaj pracy (numer ${input.workTypeId})`);
     const today = this.today();
-    this.validateMeasurement(
-      input,
-      workType.steps.some((s) => s.kind === 'scheduled'),
-      today,
-    );
+    if (input.measurementOn !== null) validateNotPast(input.measurementOn, today);
 
     return this.inTransaction(() => {
       const id = Number(
@@ -190,6 +194,23 @@ export class OrderService {
     });
   }
 
+  /** Wpisuje albo zmienia datę pomiaru (np. gdy urząd potwierdził termin); zmiana trafia do historii i da się ją cofnąć. */
+  setMeasurementDate(orderId: number, dateText: string, person: string): void {
+    const who = requirePerson(person);
+    const order = this.require(orderId);
+    if (order.status !== 'active') throw new Error(`Zlecenie nr ${orderId} jest zakończone`);
+    if (dateText.trim() === '') throw new Error('Podaj datę pomiaru');
+    const date = parseMeasurementDate(dateText.trim()) as LocalDate;
+    validateNotPast(date, this.today());
+    if (date === order.measurementOn) throw new Error('To ta sama data pomiaru, nic się nie zmienia');
+    this.inTransaction(() => {
+      this.db.connection.prepare('UPDATE orders SET measurement_on = ? WHERE id = ?').run(date, orderId);
+      const before: MeasurementUndoData = { measurementOn: order.measurementOn };
+      const change = `${dateOrNone(order.measurementOn)} → ${dateOrNone(date)}`;
+      this.log(orderId, who, 'measurement_set', null, change, before);
+    });
+  }
+
   checkToday(orderId: number, position: number, person: string): void {
     const who = requirePerson(person);
     const step = this.requireActiveStep(orderId, position);
@@ -236,20 +257,30 @@ export class OrderService {
     if (this.undoableEntryId(orderId) !== entryId) {
       throw new Error('Najpierw cofnij nowsze wpisy w historii (cofamy po kolei, od najnowszego)');
     }
-    const step = order.steps.find((s) => s.position === entry.step_position) as OrderStep;
+    const action = entry.action;
+    const step = order.steps.find((s) => s.position === entry.step_position) ?? null;
     this.inTransaction(() => {
-      if (entry.action === 'step_done') return this.revertStepDone(orderId, step, who);
-      this.restoreStep(orderId, step.position, entry);
+      if (action === 'step_done') return this.revertStepDone(orderId, step as OrderStep, who);
+      if (action === 'measurement_set') this.restoreMeasurement(orderId, entry);
+      else this.restoreStep(orderId, (step as OrderStep).position, entry);
       this.db.connection.prepare('UPDATE order_history SET reverted = 1 WHERE id = ?').run(entryId);
-      const label = UNDO_LABEL[entry.action as UndoableAction];
+      const label = UNDO_LABEL[action];
       this.log(
         orderId,
         who,
         'undone',
         step,
-        entry.action === 'limit_changed' ? `${label} ${entry.note}` : label,
+        UNDO_WITH_NOTE.includes(action) ? `${label} ${entry.note}` : label,
       );
     });
+  }
+
+  /** Przywraca datę pomiaru sprzed wpisu (także „brak daty”). */
+  private restoreMeasurement(orderId: number, entry: HistoryRow): void {
+    const data = JSON.parse(entry.undo_data ?? '{}') as MeasurementUndoData;
+    this.db.connection
+      .prepare('UPDATE orders SET measurement_on = ? WHERE id = ?')
+      .run(data.measurementOn ?? null, orderId);
   }
 
   /** Przywraca stan kroku zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit). */
@@ -344,16 +375,6 @@ export class OrderService {
       .all(orderId) as HistoryRow[];
   }
 
-  private validateMeasurement(input: OrderInput, needsMeasurement: boolean, today: LocalDate): void {
-    if (needsMeasurement && input.measurementOn === null) {
-      throw new Error('Podaj datę pomiaru w terenie');
-    }
-    // Daty RRRR-MM-DD (sprawdzone w parseOrderInput) porównują się poprawnie jako tekst.
-    if (input.measurementOn !== null && input.measurementOn < today) {
-      throw new Error(`Data pomiaru ${input.measurementOn} jest w przeszłości`);
-    }
-  }
-
   private require(orderId: number): Order {
     const order = this.get(orderId);
     if (!order) throw new Error(`Nie ma zlecenia o numerze ${orderId}`);
@@ -372,7 +393,7 @@ export class OrderService {
     action: HistoryAction,
     step: OrderStep | null,
     note: string | null = null,
-    undoData: CheckUndoData | LimitUndoData | null = null,
+    undoData: UndoData | null = null,
   ): void {
     this.db.connection
       .prepare(
@@ -464,6 +485,7 @@ function isUndoable(action: HistoryAction): action is UndoableAction {
 
 /** Czy wpis wciąż działa i da się go bezpiecznie cofnąć (stare wpisy bez zapisanego stanu: tylko „zrobione”). */
 function canRevert(order: Order, entry: HistoryRow): boolean {
+  if (entry.action === 'measurement_set') return order.status === 'active' && entry.undo_data !== null;
   const step = order.steps.find((s) => s.position === entry.step_position);
   if (!step) return false;
   if (entry.action === 'step_done') {
@@ -495,6 +517,19 @@ function toOrder(r: OrderRow, steps: OrderStep[]): Order {
     completedOn: r.completed_on,
     steps,
   };
+}
+
+/** Data pomiaru nie może być w przeszłości (dziś wolno). */
+function validateNotPast(date: LocalDate, today: LocalDate): void {
+  // Daty RRRR-MM-DD (sprawdzone wcześniej) porównują się poprawnie jako tekst.
+  if (date < today) throw new Error(`Data pomiaru ${date} jest w przeszłości`);
+}
+
+/** Data do historii: DD.MM.RRRR albo „brak”. */
+function dateOrNone(date: LocalDate | null): string {
+  if (date === null) return 'brak';
+  const [y, m, d] = date.split('-');
+  return `${d}.${m}.${y}`;
 }
 
 const MAX_STEP_LIMIT_DAYS = 365;

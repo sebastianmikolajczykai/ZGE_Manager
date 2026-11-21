@@ -235,4 +235,37 @@ describe('web routes', () => {
     expect(bad.statusCode).toBe(400);
     expect(bad.body).toContain('od 1 do 365');
   });
+
+  it('order without a measurement date: board says to fill it in, the date is added later from the card', async () => {
+    const created = await createOrder({ measurementOn: '' });
+    expect(created.statusCode).toBe(303);
+    const board = (await app.inject({ method: 'GET', url: '/' })).body;
+    expect(board).toContain('Uzupełnij datę pomiaru');
+    expect(board).toContain('bez daty pomiaru');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/pomiar',
+      headers: FORM,
+      payload: 'measurementOn=2026-11-25&person=Piotr',
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.headers.location).toBe('/?zlecenie=1');
+    const card = (await app.inject({ method: 'GET', url: '/?zlecenie=1' })).body;
+    expect(card).toContain('25.11.2026');
+    expect(card).toContain('Piotr: data pomiaru (brak → 25.11.2026)');
+    expect(card).not.toContain('Uzupełnij datę pomiaru');
+  });
+
+  it('rejects a wrong measurement date with a readable message', async () => {
+    await createOrder({ measurementOn: '' });
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/pomiar',
+      headers: FORM,
+      payload: 'measurementOn=2026-11-01&person=Piotr',
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.body).toContain('w przeszłości');
+  });
 });

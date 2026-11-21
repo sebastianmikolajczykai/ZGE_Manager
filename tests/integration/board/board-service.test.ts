@@ -104,4 +104,34 @@ describe('BoardService: rows for the "Na dziś" board', () => {
     [1, 2, 3].forEach((p) => orders.completeStep(done, p, 'Anna'));
     expect(board.rows().map((r) => r.clientName)).toEqual(['Stary', 'Nowy']);
   });
+
+  it('marks orders that still wait for the measurement date', () => {
+    orders.create(order('Bez daty', { measurementOn: null }), 'Anna');
+    orders.create(order('Z datą'), 'Anna');
+    const flags = Object.fromEntries(board.rows().map((r) => [r.clientName, r.measurementMissing]));
+    expect(flags).toEqual({ 'Bez daty': true, 'Z datą': false });
+  });
+
+  it('measurement step without a date: coloured like an own step (yellow / red after idle days), never crashes', () => {
+    const id = orders.create(order('Jan', { measurementOn: null }), 'Anna');
+    orders.completeStep(id, 1, 'Anna');
+    orders.completeStep(id, 2, 'Anna');
+    expect(board.rows()[0]).toMatchObject({
+      currentStepName: 'Pomiar w terenie',
+      urgency: { colour: 'green' },
+    });
+    today = '2026-11-18'; // 2 dni robocze bez ruchu
+    expect(board.rows()[0]?.urgency.colour).toBe('yellow');
+    today = '2026-11-19'; // 3 dni robocze
+    expect(board.rows()[0]?.urgency).toMatchObject({ colour: 'red', daysOverdue: 1 });
+  });
+
+  it('after filling in the date the measurement step follows the date again', () => {
+    const id = orders.create(order('Jan', { measurementOn: null }), 'Anna');
+    orders.completeStep(id, 1, 'Anna');
+    orders.completeStep(id, 2, 'Anna');
+    today = '2026-11-19';
+    orders.setMeasurementDate(id, '2026-11-24', 'Anna');
+    expect(board.rows()[0]).toMatchObject({ measurementMissing: false, urgency: { colour: 'green' } });
+  });
 });

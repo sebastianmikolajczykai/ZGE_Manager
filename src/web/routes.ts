@@ -6,7 +6,7 @@ import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import type { OfferService } from '../modules/offers/offer-service.js';
-import { boardPage, orderDetail, orderForm, parseColourFilter, type OrderFormValues } from './views.js';
+import { boardPage, orderDetail, orderForm, parseBoardFilter, type OrderFormValues } from './views.js';
 import { settingsFormValues, settingsPage } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
@@ -104,6 +104,9 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   orderAction('/zlecenia/:id/kroki/:position/sprawdzone', (o, p, who) => s.orders.checkToday(o, p, who));
   orderAction('/zlecenia/:id/kroki/:position/limit', (o, p, who, f) =>
     s.orders.changeStepLimit(o, p, f.limitDays ?? '', who),
+  );
+  orderAction('/zlecenia/:id/pomiar', (o, _p, who, f) =>
+    s.orders.setMeasurementDate(o, f.measurementOn ?? '', who),
   );
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
   registerHistoryUndo(app, s);
@@ -232,7 +235,7 @@ function renderBoard(
   status = 200,
   colour?: string,
 ) {
-  const options = { counts: s.pages.counts(), filter: parseColourFilter(colour) };
+  const options = { counts: s.pages.counts(), filter: parseBoardFilter(colour) };
   let detail = null;
   if (orderId !== null) {
     const order = s.orders.get(orderId);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { boardPage } from '../../../src/web/views.js';
+import { boardPage, parseBoardFilter } from '../../../src/web/views.js';
 import type { BoardRow } from '../../../src/modules/board/board-service.js';
 import type { Colour } from '../../../src/modules/urgency/urgency-rules.js';
 
@@ -16,6 +16,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     daysOnStep: 4,
     lastPerson: 'Bartek',
     pricePln: 2500,
+    measurementMissing: false,
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
   };
@@ -92,5 +93,43 @@ describe('Tablica: wiersz zlecenia', () => {
   it('has a search box that filters the list as you type', () => {
     expect(page).toMatch(/<input[^>]*type="search"[^>]*id="szukaj"/);
     expect(page).toContain('data-search-list');
+  });
+});
+
+describe('Tablica: zlecenia bez daty pomiaru', () => {
+  const rows = [
+    row(1, 'green', { measurementMissing: true }),
+    row(2, 'green'),
+    row(3, 'red', { measurementMissing: true }),
+  ];
+  const page = boardPage(rows, null, null, null, { counts: COUNTS, filter: null }).value;
+
+  it('marks the row with a clear "fill in the measurement date" label', () => {
+    const first = page.slice(page.indexOf('Klient 1 (przykład)'), page.indexOf('Klient 2 (przykład)'));
+    expect(first).toContain('class="missing-date"');
+    expect(first).toContain('Uzupełnij datę pomiaru');
+    const second = page.slice(page.indexOf('Klient 2 (przykład)'), page.indexOf('Klient 3 (przykład)'));
+    expect(second).not.toContain('Uzupełnij datę pomiaru');
+  });
+
+  it('counts them on a tile that filters the list', () => {
+    expect(tile(page, 'no-date')).toMatch(
+      /href="\/\?kolor=bez-daty"[\s\S]*<b>2<\/b\s*>[\s\S]*bez daty pomiaru/,
+    );
+    const filtered = boardPage(rows, null, null, null, { counts: COUNTS, filter: 'bez-daty' }).value;
+    expect(filtered).toContain('Klient 1 (przykład)');
+    expect(filtered).not.toContain('Klient 2 (przykład)');
+    expect(filtered).toContain('class="tile no-date on"');
+  });
+
+  it('hides the tile when every order has its date', () => {
+    const all = boardPage([row(2, 'green')], null, null, null, { counts: COUNTS, filter: null }).value;
+    expect(all).not.toContain('tile no-date');
+  });
+
+  it('reads the filter from the address', () => {
+    expect(parseBoardFilter('bez-daty')).toBe('bez-daty');
+    expect(parseBoardFilter('red')).toBe('red');
+    expect(parseBoardFilter('cos')).toBeNull();
   });
 });

@@ -11,7 +11,7 @@ export interface OrderInput {
   office: string | null;
   pricePln: number | null;
   note: string | null;
-  /** Data pomiaru w terenie (wymagana, gdy rodzaj pracy ma krok „w ustalonym dniu”). */
+  /** Data pomiaru w terenie; opcjonalna (termin bywa uzgadniany z urzędem, dopisuje się go później z karty zlecenia). */
   measurementOn: LocalDate | null;
 }
 
@@ -28,7 +28,7 @@ export function parseOrderInput(raw: OrderInput): OrderInput {
     office: optional(raw.office),
     pricePln: parsePrice(raw.pricePln),
     note: optional(raw.note),
-    measurementOn: parseDate(raw.measurementOn),
+    measurementOn: parseMeasurementDate(raw.measurementOn),
   };
 }
 
@@ -37,7 +37,8 @@ function parseWorkTypeId(value: number): number {
   return value;
 }
 
-function parseDate(value: LocalDate | null): LocalDate | null {
+/** Sprawdza datę pomiaru w formacie RRRR-MM-DD (null = brak daty). */
+export function parseMeasurementDate(value: LocalDate | null): LocalDate | null {
   if (value === null) return null;
   try {
     dateChecker.daysBetween(value, value);

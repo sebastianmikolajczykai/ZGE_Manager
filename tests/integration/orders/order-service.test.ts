@@ -83,7 +83,7 @@ describe('OrderService', () => {
     expect(service.get(id)?.steps[0]?.name).toBe('Pierwszy');
   });
 
-  it('requires the measurement date when the work type has a scheduled step', () => {
+  it('does not require the measurement date up front (it is often agreed later)', () => {
     const withMeasurement = new WorkTypeRepository(db).create({
       name: 'Z pomiarem',
       steps: [
@@ -92,7 +92,7 @@ describe('OrderService', () => {
       ],
     });
     const base = { ...input(), workTypeId: withMeasurement };
-    expect(() => service.create(base, PERSON)).toThrow(/datę pomiaru/);
+    expect(service.get(service.create(base, PERSON))?.measurementOn).toBeNull();
     const id = service.create({ ...base, measurementOn: '2026-11-25' }, PERSON);
     expect(service.get(id)?.measurementOn).toBe('2026-11-25');
   });
