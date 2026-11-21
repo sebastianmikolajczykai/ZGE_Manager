@@ -5,6 +5,7 @@ import type { LocalDate } from './modules/urgency/day-counter.js';
 import { UrgencyRules } from './modules/urgency/urgency-rules.js';
 import { SettingsService } from './modules/settings/settings-service.js';
 import { DaysOffRepository } from './modules/settings/days-off-repository.js';
+import { MessageSettingsService } from './modules/settings/message-settings.js';
 import { PageRenderer } from './web/http.js';
 import { WorkTypeRepository } from './modules/work-types/work-type-repository.js';
 import { DEFAULT_WORK_TYPES } from './modules/work-types/default-work-types.js';
@@ -76,6 +77,7 @@ export function buildApp({
     stats: new StatsService(db, today),
     today,
     settings,
+    messages: new MessageSettingsService(db, today),
     daysOff,
     workTypeAdmin,
     pages,

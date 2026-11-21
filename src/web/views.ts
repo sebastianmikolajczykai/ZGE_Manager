@@ -313,6 +313,8 @@ export function orderDetail(
   people: Person[],
   /** Wpisy historii, do których można cofnąć zlecenie (najnowszy pierwszy). */
   undoableIds: number[] = [],
+  /** Ramka z wiadomością SMS (tylko gdy zlecenie czeka na zapłatę). */
+  messageBox: SafeHtml | null = null,
 ): SafeHtml {
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
@@ -348,6 +350,7 @@ export function orderDetail(
           : ''
       }
     </dl>
+    ${messageBox ?? ''}
     <h3>Kroki</h3>
     ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
     ${historySection(history, orderUndo(order.id, undoableIds, people))}
@@ -705,6 +708,15 @@ document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 });
+// „Kopiuj wiadomość”: kopiuje tekst SMS do schowka (niczego nie wysyła).
+document.querySelectorAll('[data-copy]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var field = document.getElementById(b.getAttribute('data-copy'));
+    var done = function () { b.textContent = '✓ Skopiowano'; setTimeout(function () { b.textContent = '📋 Kopiuj wiadomość'; }, 3000); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(field.value).then(done);
+    else { field.select(); document.execCommand('copy'); done(); }
+  });
+});
 // Okienko „Czy na pewno?”: kliknięcie osoby na karcie trzeba potwierdzić drugim kliknięciem „Tak, zapisz”.
 var ask = document.getElementById('potwierdz');
 var askAll = ask && ask.getAttribute('data-all') === '1';
@@ -839,6 +851,8 @@ details.fold > summary:hover { color:var(--brand); }
 .settings-nav { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px; } .settings-nav a { padding:7px 14px; border-radius:999px; background:var(--green); color:var(--green-ink); text-decoration:none; font-weight:600; font-size:15px; }
 .form-page h3 { font-size:19px; margin:26px 0 6px; padding-top:14px; border-top:1px solid var(--line); scroll-margin-top:12px; }
 form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }
+/* Długie pola (numer konta, link): pole pod opisem, na całą szerokość. */
+form.people > label.setting.wide { grid-template-columns:minmax(0,1fr); } .setting.wide input { grid-column:1; grid-row:auto; }
 .setting small { grid-column:1; font-weight:400; color:var(--muted); font-size:15px; }
 .setting input { grid-column:2; grid-row:1 / span 2; }
 .assignee { display:inline-flex; align-items:center; gap:4px; margin-left:8px; font-size:14px; font-weight:600; color:var(--muted); white-space:nowrap; }
@@ -885,6 +899,10 @@ div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .order-form label, form.inline label { display:block; margin:10px 0; font-weight:600; }
 .order-form input, .order-form select, .order-form textarea, form.inline input { display:block; width:100%; font:inherit; padding:9px 10px; margin-top:4px; border:1px solid #d1d5db; border-radius:10px; }
 /* Oferty i Niezapłacone: blok rozmowy wyróżniony jak „CO TERAZ”. */
+/* Wiadomość SMS do klienta: zielona ramka z tekstem do skopiowania. */
+.sms-box { background:#f0fdf4; border-left:6px solid var(--brand); border-radius:12px; padding:12px 14px; margin:6px 0 12px; }
+.sms-text { width:100%; font:inherit; font-size:15px; line-height:1.45; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; resize:vertical; field-sizing:content; }
+.sms-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0 0; } .sms-actions small { color:var(--muted); }
 .offer-call { background:#eff6ff; border-left:6px solid var(--select); border-radius:12px; padding:12px 14px; margin:6px 0 12px; }
 .offer-call label, form.people > label { flex-basis:100%; }
 .offer-call textarea { display:block; width:100%; font:inherit; padding:8px; margin:4px 0; border:1px solid #bfdbfe; border-radius:10px; }

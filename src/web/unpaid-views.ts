@@ -103,6 +103,7 @@ export function unpaidDetail(
   history: HistoryEntry[],
   people: Person[],
   undoableIds: number[] = [],
+  messageBox: SafeHtml | null = null,
 ): SafeHtml {
   const noteField = html`<label
     >Notatka z rozmowy <small>(opcjonalnie)</small><textarea name="note"></textarea>
@@ -124,6 +125,7 @@ export function unpaidDetail(
       <dt>Ostatni kontakt</dt>
       <dd>${formatDate(row.lastContactOn)}</dd>
     </dl>
+    ${messageBox ?? ''}
     <div class="offer-call">
       <p class="now-label">CO TERAZ · 📞 PRZYPOMNIENIE O ZAPŁACIE</p>
       ${personButtons(`/niezaplacone/${row.orderId}/rozmowa`, 'Rozmowa', people, 'secondary', noteField)}
