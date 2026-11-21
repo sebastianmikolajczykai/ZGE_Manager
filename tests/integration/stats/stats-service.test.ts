@@ -68,11 +68,43 @@ describe('StatsService (klienci i dochód w jednym miejscu)', () => {
     expect(s.months.map((m) => m.month)).toEqual(['2026-10']);
   });
 
-  it('counts a client once per phone number, even written differently or with a second order', () => {
+  it('counts a client once per first and last name, ignoring letter case and extra spaces', () => {
     order('Jan Przykładowy', '600 100 200', 1000);
-    order('Jan Przykładowy', '+48 600-100-200', 500);
+    order('  jan   PRZYKŁADOWY ', '600 100 200', 500);
     order('Ewa Przykładowa', '601 000 000', 800);
     expect(stats.summary().totalClients).toBe(2);
+  });
+
+  it('the same name with a different phone number is still one client', () => {
+    order('Jan Przykładowy', '600 100 200', 1000);
+    order('Jan Przykładowy', '700 999 888', 500);
+    expect(stats.summary().totalClients).toBe(1);
+    expect(stats.clients()).toHaveLength(1);
+  });
+
+  it('different names with the same phone number are different clients', () => {
+    order('Jan Przykładowy', '600 100 200', 1000);
+    order('Anna Przykładowa', '600 100 200', 500);
+    expect(stats.summary().totalClients).toBe(2);
+    expect(stats.clients()).toHaveLength(2);
+  });
+
+  it('a returning client written differently is not a new client in a later month', () => {
+    order('Jan Przykładowy', '600 100 200', 100);
+    today = '2026-11-02';
+    order('JAN  przykładowy', '700 999 888', 100);
+    const months = stats.summary().months;
+    expect(months.map((m) => m.newClients)).toEqual([0, 1]);
+  });
+
+  it('client list groups orders by name and shows the latest name spelling and phone', () => {
+    const a = order('jan przykładowy', '600 100 200', 1000);
+    pay(a);
+    today = '2026-11-10';
+    order('Jan Przykładowy', '700 999 888', 300);
+    expect(stats.clients()).toEqual([
+      expect.objectContaining({ name: 'Jan Przykładowy', phone: '700 999 888', orders: 2, paidPln: 1000 }),
+    ]);
   });
 
   it('income = prices of orders marked "Zapłacone", by the month of payment', () => {

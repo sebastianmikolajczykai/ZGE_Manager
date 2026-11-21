@@ -44,8 +44,6 @@ export interface ClientStats {
 }
 
 const GROSZE_PER_PLN = 100;
-const POLISH_PREFIX = '48';
-const PHONE_WITH_PREFIX_DIGITS = 11;
 const MONTHS_PER_YEAR = 12;
 
 /** Zlecenie z tym, co potrzebne do statystyk (dzień zapłaty liczony z kroku „Zapłata”). */
@@ -63,7 +61,7 @@ interface OrderFacts {
 /**
  * Statystyki firmy (CRM): klienci, dochód ogólny i miesięczny, nowi klienci, oferty.
  * Tylko odczyt; wszystko liczone z zapisanych zleceń i ofert, bez osobnych danych.
- * Klient = numer telefonu (cyfry, bez +48); dochód = ceny zleceń „Zapłacone” wg dnia zapłaty.
+ * Klient = imię i nazwisko (bez wielkości liter i zbędnych spacji); dochód = ceny zleceń „Zapłacone” wg dnia zapłaty.
  */
 export class StatsService {
   constructor(
@@ -180,13 +178,13 @@ interface OrderStatsRow {
   waiting: number;
 }
 
-/** Ten sam klient = ten sam numer telefonu (same cyfry, bez +48); bez numeru – po nazwie. */
-function clientKey(o: { clientName: string; phone: string }): string {
-  let digits = o.phone.replace(/\D/g, '');
-  if (digits.length === PHONE_WITH_PREFIX_DIGITS && digits.startsWith(POLISH_PREFIX)) {
-    digits = digits.slice(POLISH_PREFIX.length);
-  }
-  return digits || `nazwa:${o.clientName.trim().toLowerCase()}`;
+/**
+ * Ten sam klient = to samo imię i nazwisko: bez rozróżniania wielkości liter i zbędnych spacji
+ * („  jan   KOWALSKI ” = „Jan Kowalski”). Telefon nie ma znaczenia.
+ * Uwaga: dwie różne osoby o tym samym imieniu i nazwisku liczą się jako jeden klient.
+ */
+function clientKey(o: { clientName: string }): string {
+  return o.clientName.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pl');
 }
 
 function monthOf(date: LocalDate): Month {

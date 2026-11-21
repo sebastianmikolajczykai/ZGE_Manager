@@ -84,6 +84,8 @@ describe('Statystyki', () => {
 
   it('explains how the numbers are counted and warns about paid orders without a price', () => {
     expect(page).toContain('Jak liczymy');
+    expect(page).toContain('to imię i nazwisko');
+    expect(page).not.toContain('to numer telefonu');
     expect(page).toContain('1 zapłacone zlecenie bez wpisanej ceny');
   });
 

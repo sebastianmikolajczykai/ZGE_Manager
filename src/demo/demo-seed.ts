@@ -138,7 +138,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
 ];
 
-/** Zmyślony numer, inny dla każdego przykładowego klienta (Statystyki liczą klientów po telefonie). */
+/** Zmyślony numer, inny dla każdego przykładowego klienta (do kliknięcia „zadzwoń” w przykładzie). */
 const DEMO_PHONE_FIRST = 100;
 const demoPhone = (n: number): string => `500 000 ${DEMO_PHONE_FIRST + n}`;
 const DEMO_OFFICE = 'Urząd Miejski (przykład)';
