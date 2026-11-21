@@ -18,7 +18,7 @@ describe('layout (wygląd w stylu ZGE)', () => {
 
   it('keeps CSS and the auto-refresh script unescaped (otherwise the browser ignores them)', () => {
     const style = page.slice(page.indexOf('<style>'), page.indexOf('</style>'));
-    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>', page.indexOf('<script>')));
     expect(style).toContain('"Segoe UI"');
     expect(style).not.toContain('&quot;');
     expect(script).toContain('&&');
@@ -26,12 +26,12 @@ describe('layout (wygląd w stylu ZGE)', () => {
   });
 
   it('an expanded fold (steps, history) does not stop the auto-refresh, only open undo/reject forms do', () => {
-    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>', page.indexOf('<script>')));
     expect(script).toContain('details[open]:not(.fold)');
   });
 
   it('remembers which folds were open, so the 60-second refresh does not close them', () => {
-    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>', page.indexOf('<script>')));
     expect(script).toContain('localStorage');
     expect(script).toContain('data-fold');
   });
@@ -41,14 +41,14 @@ describe('layout (wygląd w stylu ZGE)', () => {
   });
 
   it('makes the − / + buttons change the number next to them within its min and max', () => {
-    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>', page.indexOf('<script>')));
     expect(script).toContain('[data-step]');
     expect(script).toContain("getAttribute('min')");
     expect(script).toContain("getAttribute('max')");
   });
 
   it('does not reload the list while something is typed in the search box', () => {
-    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>'));
+    const script = page.slice(page.indexOf('<script>'), page.indexOf('</script>', page.indexOf('<script>')));
     expect(script).toContain("getElementById('szukaj')");
   });
 });
@@ -89,7 +89,10 @@ describe('layout: okienko „Czy na pewno?”', () => {
   });
 
   it('asks only for clicks on a card (orders, offers, payments), not on the settings screen', () => {
-    const script = withConfirm.slice(withConfirm.indexOf('<script>'), withConfirm.indexOf('</script>'));
+    const script = withConfirm.slice(
+      withConfirm.indexOf('<script>'),
+      withConfirm.indexOf('</script>', withConfirm.indexOf('<script>')),
+    );
     expect(script).toContain('.detail form.people');
   });
 
@@ -97,19 +100,28 @@ describe('layout: okienko „Czy na pewno?”', () => {
     expect(without).toContain('<dialog id="potwierdz"');
     expect(without).toContain('data-all="0"');
     expect(withConfirm).toContain('data-all="1"');
-    const script = without.slice(without.indexOf('<script>'), without.indexOf('</script>'));
+    const script = without.slice(
+      without.indexOf('<script>'),
+      without.indexOf('</script>', without.indexOf('<script>')),
+    );
     expect(script).toContain('.detail form.people[data-confirm]');
   });
 
   it('does not reload the page while the question is open', () => {
-    const script = withConfirm.slice(withConfirm.indexOf('<script>'), withConfirm.indexOf('</script>'));
+    const script = withConfirm.slice(
+      withConfirm.indexOf('<script>'),
+      withConfirm.indexOf('</script>', withConfirm.indexOf('<script>')),
+    );
     expect(script).toContain('dialog[open]');
   });
 
   it('when switched off in Ustawienia, a normal click on a person does not ask', () => {
     // okienko istnieje, ale skrypt pyta tylko formularze z data-confirm (cofanie kilku wpisów)
     expect(without).toContain('data-all="0"');
-    const script = without.slice(without.indexOf('<script>'), without.indexOf('</script>'));
+    const script = without.slice(
+      without.indexOf('<script>'),
+      without.indexOf('</script>', without.indexOf('<script>')),
+    );
     expect(script).toContain("askAll ? '.detail form.people' : '.detail form.people[data-confirm]'");
   });
 });

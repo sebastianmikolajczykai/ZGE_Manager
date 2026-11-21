@@ -15,6 +15,7 @@ import {
   STATUS_ICON,
   statusChip,
 } from './view-helpers.js';
+import { THEME_STYLES, themeToggle, TRUSTED_THEME_SCRIPT } from './theme.js';
 import type { BoardRow } from '../modules/board/board-service.js';
 import type { HistoryEntry, Order, OrderStep } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
@@ -68,6 +69,9 @@ export function layout(
         <style>
           ${TRUSTED_STYLES}
         </style>
+        <script id="motyw-skrypt">
+          ${TRUSTED_THEME_SCRIPT};
+        </script>
       </head>
       <body>
         <div class="app">
@@ -121,6 +125,7 @@ function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
     <a class="monitor-link" href="/monitor" target="_blank" rel="noopener"
       ><span class="ic" aria-hidden="true">📺</span>Widok na monitor</a
     >
+    ${themeToggle()}
     <p class="side-foot">Lista odświeża się co ${refreshSeconds} s</p>
   </aside>`;
 }
@@ -922,7 +927,7 @@ dialog#potwierdz::backdrop { background:rgba(15,61,36,.55); }
 `;
 
 // Stałe napisane w kodzie (bez danych od użytkownika), więc wstawiamy je bez zamiany znaków.
-const TRUSTED_STYLES = new SafeHtml(STYLES);
+const TRUSTED_STYLES = new SafeHtml(STYLES + THEME_STYLES);
 /** Skrypt strony; jedyna zmienna to liczba sekund (sprawdzona liczba całkowita z Ustawień). */
 function trustedScript(refreshSeconds: number): SafeHtml {
   return new SafeHtml(`var REFRESH_MS = ${refreshMs(refreshSeconds)};${PAGE_SCRIPT}`);
