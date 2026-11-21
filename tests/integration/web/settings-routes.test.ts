@@ -51,11 +51,61 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
       ['kolory', 'Kolory i przypomnienia'],
       ['rodzaje-prac', 'Rodzaje prac'],
       ['dni-wolne', 'Dni wolne firmy'],
+      ['wiadomosc', 'Wiadomość do klienta'],
       ['osoby', 'Osoby'],
     ]) {
       expect(page).toContain(`href="#${id}"`);
-      expect(page).toMatch(new RegExp(`<h3 id="${id}">${name}`));
+      expect(oneLine(page)).toMatch(new RegExp(`id="${id}"[^>]*> <summary><h3>${name}`));
     }
+  });
+
+  /** Prettier łamie długie znaczniki na kilka linii; w testach sklejamy odstępy w jedną spację. */
+  const oneLine = (body: string) => body.replace(/\s+/g, ' ');
+
+  it('every section is a fold, closed by default, so the page is short', async () => {
+    const page = oneLine(await settingsPage());
+    const sections = [...page.matchAll(/<details class="fold settings-section"([^>]*)>/g)];
+    expect(sections.map((m) => (m[1] ?? '').match(/id="([^"]+)"/)?.[1])).toEqual([
+      'kolory',
+      'rodzaje-prac',
+      'dni-wolne',
+      'wiadomosc',
+      'osoby',
+    ]);
+    for (const [, attrs] of sections) {
+      expect(attrs).toMatch(/data-fold="ustawienia-[a-z-]+"/);
+      expect(attrs).not.toContain('open');
+    }
+  });
+
+  it('section titles show how many items are inside', async () => {
+    const page = await settingsPage();
+    expect(page).toMatch(/<h3>Rodzaje prac <small class="count">\(\d+\)<\/small><\/h3>/);
+    expect(page).toContain('<h3>Dni wolne firmy <small class="count">(0)</small></h3>');
+    expect(page).toContain('<h3>Osoby (przyciski „kto zrobił”) <small class="count">(2)</small></h3>');
+  });
+
+  it('change history stays a separate fold inside its section', async () => {
+    const page = await settingsPage();
+    expect(page).toMatch(/id="kolory"[\s\S]*data-fold="settings-history"[\s\S]*id="rodzaje-prac"/);
+    expect(page).toMatch(/id="rodzaje-prac"[\s\S]*data-fold="work-type-history"[\s\S]*id="dni-wolne"/);
+  });
+
+  it('after saving or a refused save the "Kolory" section is shown open', async () => {
+    await saveThresholds({ redAfterIdleDays: '5' });
+    const saved = oneLine((await app.inject({ method: 'GET', url: '/ustawienia?zapisano=1&kto=Anna' })).body);
+    expect(saved).toMatch(/<details class="fold settings-section" id="kolory"[^>]*\bopen ?>/);
+    const refused = oneLine((await saveThresholds({ redAfterIdleDays: 'abc' })).body);
+    expect(refused).toMatch(/<details class="fold settings-section" id="kolory"[^>]*\bopen ?>/);
+    expect(refused).toMatch(/<details class="fold settings-section" id="osoby"[^>]*data-fold="[^"]+" ?>/);
+  });
+
+  it('adding people and days off returns to the right section', async () => {
+    expect((await post('/ustawienia/osoby', { name: 'Ewa' })).headers.location).toBe('/ustawienia#osoby');
+    expect((await post('/ustawienia/osoby/3/usun', {})).headers.location).toBe('/ustawienia#osoby');
+    const added = await post('/ustawienia/dni-wolne', { fromOn: '2026-12-28', person: 'Anna' });
+    expect(added.headers.location).toBe('/ustawienia#dni-wolne');
+    expect((await post('/ustawienia/dni-wolne/1/usun', {})).headers.location).toBe('/ustawienia#dni-wolne');
   });
 
   it('shows the current values in editable fields with "Zapisz zmiany: osoba" buttons', async () => {

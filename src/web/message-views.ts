@@ -46,8 +46,7 @@ export function messageSettingsSection(view: MessageSettingsView, people: Person
       ><span>Link do opinii Google</span><small>opcjonalnie; bez linku zdanie o opinii nie pojawi się</small
       ><input name="reviewLink" class="text" value="${view.values.reviewLink ?? ''}"
     /></label>`;
-  return html`<h3 id="wiadomosc">Wiadomość do klienta (SMS)</h3>
-    <p>
+  return html`<p>
       <small>Gotowa wiadomość o zapłacie pojawia się na karcie zlecenia, gdy czeka ono na zapłatę.</small>
     </p>
     ${personButtons('/ustawienia/wiadomosc', 'Zapisz dane SMS', people, 'primary', fields)}

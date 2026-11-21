@@ -10,7 +10,12 @@ import type { WorkTypeRepository } from '../modules/work-types/work-type-reposit
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import type { OfferService } from '../modules/offers/offer-service.js';
 import { boardPage, orderDetail, orderForm, parseBoardFilter, type OrderFormValues } from './views.js';
-import { settingsFormValues, settingsPage, type SavedNote } from './settings-views.js';
+import {
+  settingsFormValues,
+  settingsPage,
+  type SavedNote,
+  type SettingsSectionId,
+} from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
 import { monitorPage } from './monitor-views.js';
@@ -126,20 +131,21 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     s.pages.send(reply, 'Statystyki', statsPage(s.stats.summary(), s.stats.clients())),
   );
 
-  app.get('/ustawienia', (req, reply) =>
-    renderSettings(reply, s, null, { saved: savedNoteFrom(req.query as Form) }),
-  );
+  app.get('/ustawienia', (req, reply) => {
+    const saved = savedNoteFrom(req.query as Form);
+    return renderSettings(reply, s, null, { saved, open: saved ? 'kolory' : undefined });
+  });
   app.post('/ustawienia/osoby', (req, reply) => {
     try {
       s.people.add((req.body as Form).name ?? '');
-      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+      return reply.redirect('/ustawienia#osoby', HTTP_SEE_OTHER);
     } catch (err) {
-      return renderSettings(reply, s, message(err));
+      return renderSettings(reply, s, message(err), { open: 'osoby' });
     }
   });
   app.post('/ustawienia/osoby/:id/usun', (req, reply) => {
     s.people.remove(Number((req.params as Form).id));
-    return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+    return reply.redirect('/ustawienia#osoby', HTTP_SEE_OTHER);
   });
 
   app.post('/ustawienia/progi', (req, reply) => {
@@ -149,10 +155,14 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
       return reply.redirect(savedUrl(count, form.person ?? ''), HTTP_SEE_OTHER);
     } catch (err) {
       if (!(err instanceof SettingsValidationError))
-        return renderSettings(reply, s, message(err), { typed: form });
+        return renderSettings(reply, s, message(err), { typed: form, open: 'kolory' });
       const count = Object.keys(err.fieldErrors).length;
       const summary = `Nie zapisano. Popraw zaznaczone pola (${count}).`;
-      return renderSettings(reply, s, summary, { typed: form, fieldErrors: err.fieldErrors });
+      return renderSettings(reply, s, summary, {
+        typed: form,
+        fieldErrors: err.fieldErrors,
+        open: 'kolory',
+      });
     }
   });
   app.post('/ustawienia/progi/domyslne', (req, reply) => {
@@ -161,7 +171,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
       const count = s.settings.resetToDefaults(person);
       return reply.redirect(savedUrl(count, person), HTTP_SEE_OTHER);
     } catch (err) {
-      return renderSettings(reply, s, message(err));
+      return renderSettings(reply, s, message(err), { open: 'kolory' });
     }
   });
 
@@ -170,9 +180,9 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     try {
       const input = { fromOn: form.fromOn ?? '', toOn: form.toOn ?? '', note: form.note ?? null };
       s.daysOff.add(input, form.person ?? '');
-      return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+      return reply.redirect('/ustawienia#dni-wolne', HTTP_SEE_OTHER);
     } catch (err) {
-      return renderSettings(reply, s, message(err));
+      return renderSettings(reply, s, message(err), { open: 'dni-wolne' });
     }
   });
   app.post('/ustawienia/wiadomosc', (req, reply) => {
@@ -181,15 +191,15 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
       s.messages.update(form, form.person ?? '');
       return reply.redirect('/ustawienia#wiadomosc', HTTP_SEE_OTHER);
     } catch (err) {
-      return renderSettings(reply, s, message(err), { typedMessage: form });
+      return renderSettings(reply, s, message(err), { typedMessage: form, open: 'wiadomosc' });
     }
   });
   app.post('/ustawienia/dni-wolne/:id/usun', (req, reply) => {
     s.daysOff.remove(Number((req.params as Form).id));
-    return reply.redirect('/ustawienia', HTTP_SEE_OTHER);
+    return reply.redirect('/ustawienia#dni-wolne', HTTP_SEE_OTHER);
   });
 
-  registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error));
+  registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error, { open: 'rodzaje-prac' }));
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
 
@@ -210,6 +220,8 @@ interface SettingsExtras {
   saved?: SavedNote | null;
   /** To, co ktoś wpisał w sekcji „Wiadomość do klienta (SMS)” (przy błędzie). */
   typedMessage?: Form;
+  /** Sekcja rozwinięta od razu (wynik zapisu albo błąd). */
+  open?: SettingsSectionId;
 }
 
 function renderSettings(
@@ -230,6 +242,7 @@ function renderSettings(
     workTypes,
     workTypeHistory: s.workTypeAdmin.history(),
     message: { values: extras.typedMessage ?? { ...s.messages.get() }, history: s.messages.history() },
+    openSection: extras.open,
   };
   return s.pages.send(
     reply,

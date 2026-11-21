@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('rodzaje prac: nowy rodzaj z krokami, kolejność, zapis i wybór przy zleceniu', async ({ page }) => {
   const name = `Mapa E2E ${Date.now()}`;
-  await page.goto('/ustawienia');
+  await page.goto('/ustawienia#rodzaje-prac');
   await page.getByRole('link', { name: '+ Nowy rodzaj pracy' }).click();
 
   await page.getByLabel('Nazwa rodzaju pracy').fill(name);

@@ -17,8 +17,7 @@ const ACTION_LABEL: Record<WorkTypeAction, string> = {
 
 /** Sekcja na ekranie Ustawień: lista rodzajów prac i historia ich zmian. */
 export function workTypesSection(workTypes: WorkType[], history: WorkTypeHistoryEntry[]): SafeHtml {
-  return html`<h3 id="rodzaje-prac">Rodzaje prac</h3>
-    <p><small>Kroki, ich kolejność i limity. Zmiany dotyczą tylko nowych zleceń.</small></p>
+  return html`<p><small>Kroki, ich kolejność i limity. Zmiany dotyczą tylko nowych zleceń.</small></p>
     <ul class="work-types">
       ${workTypes.map(
         (w) =>
@@ -67,7 +66,7 @@ export function workTypeEditor(state: EditorState): SafeHtml {
   const { workType, draft, people, error, notice } = state;
   const action = workType ? `/ustawienia/prace/${workType.id}` : '/ustawienia/prace';
   return html`<section class="form-page wide">
-    <p><a href="/ustawienia">← Ustawienia</a></p>
+    <p><a href="/ustawienia#rodzaje-prac">← Ustawienia</a></p>
     <h2>${workType ? `Rodzaj pracy: ${workType.name}` : 'Nowy rodzaj pracy'}</h2>
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     ${notice === 'saved' ? html`<p class="notice" role="status">Zapisano. Zmiany dotyczą nowych zleceń.</p>` : ''}

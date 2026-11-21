@@ -4,6 +4,7 @@ test('ustawienia: zmiana progu, historia zmian i przywrócenie domyślnych', asy
   await page.goto('/');
   await page.getByRole('link', { name: 'Ustawienia' }).click();
   await expect(page.getByRole('heading', { name: 'Kolory i przypomnienia' })).toBeVisible();
+  await page.getByRole('link', { name: '🎨 Kolory i przypomnienia' }).click();
 
   await page.getByRole('spinbutton', { name: 'Przypomnienie o ofercie po' }).fill('9');
   await page.getByRole('button', { name: 'Zapisz zmiany: Bartek' }).click();
@@ -21,7 +22,7 @@ test('ustawienia: zmiana progu, historia zmian i przywrócenie domyślnych', asy
 test('ustawienia: niezapisane zmiany widać, błędy są przy polach, po zapisie jest potwierdzenie', async ({
   page,
 }) => {
-  await page.goto('/ustawienia');
+  await page.goto('/ustawienia#kolory');
   const yellow = page.getByRole('spinbutton', { name: 'Żółte, gdy brak ruchu przez' });
   const red = page.getByRole('spinbutton', { name: 'Czerwone, gdy brak ruchu przez' });
   const refresh = page.getByRole('spinbutton', { name: 'Odświeżanie ekranu co (sekund)' });
@@ -62,7 +63,7 @@ test('ustawienia: niezapisane zmiany widać, błędy są przy polach, po zapisie
 });
 
 test('ustawienia: wyjście ze strony z niezapisanymi zmianami pyta, czy je porzucić', async ({ page }) => {
-  await page.goto('/ustawienia');
+  await page.goto('/ustawienia#kolory');
   await page.getByRole('button', { name: 'Zwiększ: Przypomnienie o ofercie po' }).click();
   const asked = new Promise<string>((resolve) => {
     page.once('dialog', (dialog) => {
@@ -73,4 +74,33 @@ test('ustawienia: wyjście ze strony z niezapisanymi zmianami pyta, czy je porzu
   await page.getByRole('link', { name: 'Oferty' }).first().click();
   expect(await asked).toBe('beforeunload');
   await expect(page).toHaveURL(/\/oferty/);
+});
+
+test('ustawienia: sekcje są zwinięte, menu u góry je rozwija, przeglądarka pamięta wybór', async ({
+  page,
+}) => {
+  await page.goto('/ustawienia');
+  const offerField = page.getByRole('spinbutton', { name: 'Przypomnienie o ofercie po' });
+  const addDayOff = page.getByRole('button', { name: 'Dodaj dni wolne: Łukasz' });
+  await expect(page.getByRole('heading', { name: /^Dni wolne firmy/ })).toBeVisible();
+  await expect(offerField).toBeHidden();
+  await expect(addDayOff).toBeHidden();
+
+  // Klik w menu u góry rozwija wybraną sekcję; historia w środku zostaje zwinięta.
+  await page.getByRole('link', { name: '🏖 Dni wolne' }).click();
+  await expect(addDayOff).toBeVisible();
+  await expect(offerField).toBeHidden();
+  await page.getByRole('heading', { name: 'Kolory i przypomnienia' }).click();
+  await expect(offerField).toBeVisible();
+  await expect(page.getByText(/^Historia zmian ustawień \(\d+\)$/)).toBeVisible();
+  await expect(page.locator('details[data-fold="settings-history"]')).not.toHaveAttribute('open', '');
+
+  // Po odświeżeniu rozwinięte zostają rozwinięte; ponowny klik w tytuł zwija sekcję.
+  await page.reload();
+  await expect(offerField).toBeVisible();
+  await expect(addDayOff).toBeVisible();
+  await page.getByRole('heading', { name: /^Dni wolne firmy/ }).click();
+  await expect(addDayOff).toBeHidden();
+  await page.getByRole('heading', { name: 'Kolory i przypomnienia' }).click();
+  await expect(offerField).toBeHidden();
 });
