@@ -6,7 +6,7 @@ import { AppDatabase } from '../../../src/db.js';
 import { OrderService } from '../../../src/modules/orders/order-service.js';
 
 const MIGRATIONS = path.join(import.meta.dirname, '..', '..', '..', 'migrations');
-const MEASUREMENT_MIGRATION = '012_measurement_history.sql';
+const MEASUREMENT_MIGRATION = '013_measurement_history.sql';
 
 /** Baza „sprzed aktualizacji”: wszystkie migracje przed wpisem „data pomiaru” w historii. */
 function databaseBefore(file: string): AppDatabase {
@@ -20,7 +20,7 @@ function databaseBefore(file: string): AppDatabase {
   return db;
 }
 
-describe('migracja 012: data pomiaru w historii zlecenia', () => {
+describe('migracja 013: data pomiaru w historii zlecenia', () => {
   let dir: string;
   let db: AppDatabase;
 
