@@ -1,7 +1,8 @@
-import { entriesText, describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { html } from '../../../src/web/html.js';
 import {
   avatar,
+  entriesText,
   numberStepper,
   historyList,
   personButtons,
