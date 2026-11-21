@@ -1,9 +1,13 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { PaymentService } from '../modules/payments/payment-service.js';
-import type { OrderService } from '../modules/orders/order-service.js';
+import type { Order, OrderService } from '../modules/orders/order-service.js';
 import type { PeopleRepository } from '../modules/people/people-repository.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
 import { unpaidDetail, unpaidPage } from './unpaid-views.js';
+import { paymentMessageBox } from './message-views.js';
+import { paymentMessage } from '../modules/payments/payment-message.js';
+import type { MessageSettingsService } from '../modules/settings/message-settings.js';
+import type { WorkTypeRepository } from '../modules/work-types/work-type-repository.js';
 import {
   HTTP_BAD_REQUEST,
   HTTP_NOT_FOUND,
@@ -15,6 +19,8 @@ import {
 
 export interface UnpaidWebServices {
   payments: PaymentService;
+  messages: MessageSettingsService;
+  workTypes: WorkTypeRepository;
   orders: OrderService;
   people: PeopleRepository;
   today: () => LocalDate;
@@ -22,6 +28,16 @@ export interface UnpaidWebServices {
 }
 
 const TITLE = 'Niezapłacone';
+
+/** Gotowy SMS o zapłacie dla zlecenia (null = brak numeru konta w Ustawieniach albo brak zlecenia). */
+export function paymentText(
+  s: Pick<UnpaidWebServices, 'messages' | 'workTypes'>,
+  order: Order | null,
+): string | null {
+  if (!order) return null;
+  const workType = s.workTypes.findById(order.workTypeId)?.name ?? 'praca geodezyjna';
+  return paymentMessage(order, workType, s.messages.get());
+}
 
 /** Zakładka Niezapłacone: lista, rozmowa z przypomnieniem, „Zapłacone”. */
 export function registerUnpaidRoutes(app: FastifyInstance, s: UnpaidWebServices): void {
@@ -81,6 +97,7 @@ function renderUnpaid(
       s.orders.history(orderId),
       s.people.list(),
       s.orders.undoableEntryIds(orderId),
+      paymentMessageBox(paymentText(s, s.orders.get(orderId)), row.phone),
     );
   }
   return s.pages.send(

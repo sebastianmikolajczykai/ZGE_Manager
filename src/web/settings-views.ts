@@ -20,6 +20,7 @@ import type { DaysOff } from '../modules/settings/days-off-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin.js';
 import { workTypesSection } from './work-type-views.js';
+import { messageSettingsSection, type MessageSettingsView } from './message-views.js';
 
 /** Potwierdzenie po zapisie: ile pól się zmieniło i kto zapisał. */
 export interface SavedNote {
@@ -39,6 +40,7 @@ export interface SettingsView {
   daysOff: DaysOff[];
   workTypes: WorkType[];
   workTypeHistory: WorkTypeHistoryEntry[];
+  message: MessageSettingsView;
 }
 
 /** Ustawienia jako wartości pól formularza (przełącznik: '1' = włączony, brak = wyłączony). */
@@ -60,7 +62,8 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     <h2>Ustawienia</h2>
     <nav class="settings-nav" aria-label="Sekcje ustawień">
       <a href="#kolory">🎨 Kolory i przypomnienia</a><a href="#rodzaje-prac">🧭 Rodzaje prac</a
-      ><a href="#dni-wolne">🏖 Dni wolne</a><a href="#osoby">👥 Osoby</a>
+      ><a href="#dni-wolne">🏖 Dni wolne</a><a href="#wiadomosc">✉️ Wiadomość SMS</a
+      ><a href="#osoby">👥 Osoby</a>
     </nav>
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <h3 id="kolory">Kolory i przypomnienia</h3>
@@ -73,6 +76,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     </details>
     ${fold('settings-history', `Historia zmian ustawień (${view.history.length})`, historyList(view.history))}
     ${workTypesSection(view.workTypes, view.workTypeHistory)} ${daysOffSection(view.daysOff, people)}
+    ${messageSettingsSection(view.message, people)}
     <h3 id="osoby">Osoby (przyciski „kto zrobił”)</h3>
     <ul class="people-list">
       ${people.map(
