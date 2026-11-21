@@ -11,6 +11,8 @@ import { settingsFormValues, settingsPage } from './settings-views.js';
 import { registerOfferRoutes } from './offer-routes.js';
 import { registerUnpaidRoutes } from './unpaid-routes.js';
 import type { PaymentService } from '../modules/payments/payment-service.js';
+import type { StatsService } from '../modules/stats/stats-service.js';
+import { statsPage } from './stats-views.js';
 import {
   HTTP_BAD_REQUEST,
   HTTP_FORBIDDEN,
@@ -34,6 +36,7 @@ export interface WebServices {
   workTypes: WorkTypeRepository;
   offers: OfferService;
   payments: PaymentService;
+  stats: StatsService;
   today: () => LocalDate;
   settings: SettingsService;
   daysOff: DaysOffRepository;
@@ -103,6 +106,11 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
     s.orders.changeStepLimit(o, p, f.limitDays ?? '', who),
   );
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
+  registerHistoryUndo(app, s);
+
+  app.get('/statystyki', (_req, reply) =>
+    s.pages.send(reply, 'Statystyki', statsPage(s.stats.summary(), s.stats.clients())),
+  );
 
   app.get('/ustawienia', (_req, reply) => renderSettings(reply, s, null));
   app.post('/ustawienia/osoby', (req, reply) => {
@@ -193,6 +201,29 @@ function valuesFromOffer(o: NonNullable<ReturnType<OfferService['get']>>): Order
   return values;
 }
 
+/**
+ * Cofnięcie wpisu z historii zlecenia. Z karty w Niezapłaconych (pole „widok”) wracamy tam,
+ * jeśli zlecenie nadal czeka na zapłatę; w innym razie na kartę zlecenia.
+ */
+function registerHistoryUndo(app: FastifyInstance, s: WebServices): void {
+  app.post('/zlecenia/:id/historia/:entry/cofnij', (req, reply) => {
+    const params = req.params as Form;
+    const form = req.body as Form;
+    const orderId = Number(params.id);
+    try {
+      s.orders.undoEntry(orderId, Number(params.entry), form.person ?? '');
+      const stillUnpaid = s.payments.rows().some((r) => r.orderId === orderId);
+      const back =
+        form.widok === 'niezaplacone' && stillUnpaid
+          ? `/niezaplacone?zlecenie=${orderId}`
+          : `/?zlecenie=${orderId}`;
+      return reply.redirect(back, HTTP_SEE_OTHER);
+    } catch (err) {
+      return renderBoard(reply, s, s.orders.get(orderId) ? orderId : null, message(err), HTTP_BAD_REQUEST);
+    }
+  });
+}
+
 function renderBoard(
   reply: FastifyReply,
   s: WebServices,
@@ -215,7 +246,14 @@ function renderBoard(
     const active = order.steps.find((st) => st.status === 'active');
     const urgency = active ? s.board.urgencyOf(order, active, s.today()) : null;
     const workType = s.workTypes.findById(order.workTypeId)?.name ?? '?';
-    detail = orderDetail(order, workType, urgency, s.orders.history(orderId), s.people.list());
+    detail = orderDetail(
+      order,
+      workType,
+      urgency,
+      s.orders.history(orderId),
+      s.people.list(),
+      s.orders.undoableEntryId(orderId),
+    );
   }
   return s.pages.send(
     reply,

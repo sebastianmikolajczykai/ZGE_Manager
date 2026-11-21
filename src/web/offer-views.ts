@@ -1,15 +1,21 @@
 import { html, type SafeHtml } from './html.js';
 import {
-  avatar,
   fold,
   formatDate,
   formatPrice,
+  historyList,
   personButtons,
   personTag,
   rowClass,
   statusChip,
 } from './view-helpers.js';
-import type { Offer, OfferHistoryEntry, OfferRow, OfferStatus } from '../modules/offers/offer-service.js';
+import type {
+  ClosedOfferRow,
+  Offer,
+  OfferHistoryEntry,
+  OfferRow,
+  OfferStatus,
+} from '../modules/offers/offer-service.js';
 import type { Person } from '../modules/people/people-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { Urgency } from '../modules/urgency/urgency-rules.js';
@@ -31,6 +37,7 @@ export function offersPage(
   detail: SafeHtml | null,
   error: string | null,
   selectedId: number | null = null,
+  recentlyClosed: ClosedOfferRow[] = [],
 ): SafeHtml {
   return html` ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <div class="page-head">
@@ -40,9 +47,25 @@ export function offersPage(
     <div class="split">
       <section class="board" aria-label="Lista ofert">
         ${rows.length === 0 ? html`<p class="empty">Brak otwartych ofert.</p>` : offersTable(rows, selectedId)}
+        ${recentlyClosed.length > 0 ? closedList(recentlyClosed) : ''}
       </section>
       ${detail ?? html`<section class="detail placeholder" aria-label="Szczegóły oferty"><p>Kliknij klienta na liście, żeby zobaczyć ofertę.</p></section>`}
     </div>`;
+}
+
+/** Ostatnio zamknięte oferty: link do karty, gdzie w historii można cofnąć zamknięcie. */
+function closedList(closed: ClosedOfferRow[]): SafeHtml {
+  return html`<h2 class="recent-head">Ostatnio zamknięte</h2>
+    <ul class="recent">
+      ${closed.map(
+        (o) =>
+          html`<li>
+            <a href="/oferty?oferta=${o.offerId}">${o.clientName}</a> <span>${CLOSED_LABEL[o.status]}</span>
+            <small>${formatDate(o.closedOn)}</small>
+          </li>`,
+      )}
+    </ul>
+    <p class="hint">Pomyłka? Otwórz ofertę i w Historii kliknij wpis, żeby go cofnąć.</p>`;
 }
 
 function offersTable(rows: OfferRow[], selectedId: number | null): SafeHtml {
@@ -85,6 +108,7 @@ export function offerDetail(
   history: OfferHistoryEntry[],
   people: Person[],
   reminderDays: number,
+  undoableId: number | null = null,
 ): SafeHtml {
   const open = offer.status === 'open';
   return html`<section class="detail" aria-label="Szczegóły oferty">
@@ -132,14 +156,11 @@ export function offerDetail(
     ${fold(
       'history',
       `Historia (${history.length})`,
-      html`<ul class="history">
-        ${[...history]
-          .reverse()
-          .map(
-            (h) =>
-              html`<li>${avatar(h.person)}<time>${formatDate(h.happenedOn)}</time> ${historyText(h)}</li>`,
-          )}
-      </ul>`,
+      historyList(history, historyText, {
+        entryId: undoableId,
+        action: (id) => `/oferty/${offer.id}/historia/${id}/cofnij`,
+        people,
+      }),
     )}
   </section>`;
 }
@@ -183,6 +204,8 @@ function historyText(h: OfferHistoryEntry): SafeHtml {
       return html`${h.person}: odrzucona${note}`;
     case 'accepted':
       return html`${h.person}: przyjęta${note}`;
+    case 'undone':
+      return html`${h.person}: cofnięcie${note}`;
   }
 }
 

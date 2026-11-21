@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { html } from '../../../src/web/html.js';
 import {
   avatar,
+  historyList,
   personButtons,
   personColour,
   progressBar,
@@ -64,5 +66,42 @@ describe('przyciski osób', () => {
     expect(button.replace(/<span[^>]*aria-hidden="true"[^>]*>[^<]*<\/span>/g, '')).toMatch(
       />\s*Zrobione: Bartek\s*$/,
     );
+  });
+});
+
+describe('historia z cofaniem', () => {
+  const people = [{ id: 1, name: 'Bartek' }];
+  const entries = [
+    { id: 1, person: 'Łukasz', happenedOn: '2026-11-18', reverted: false },
+    { id: 2, person: 'Bartek', happenedOn: '2026-11-19', reverted: true },
+    { id: 3, person: 'Łukasz', happenedOn: '2026-11-20', reverted: false },
+  ];
+  const text = (h: { id: number }) => html`wpis ${h.id}`;
+  const page = historyList(entries, text, { entryId: 3, action: (id) => `/x/${id}/cofnij`, people }).value;
+
+  it('shows the newest entry first', () => {
+    expect(page.indexOf('wpis 3')).toBeLessThan(page.indexOf('wpis 1'));
+  });
+
+  it('the newest working entry opens with a click and offers "Cofnij" for each person', () => {
+    const item = page.slice(
+      page.indexOf('<li class="can-undo"'),
+      page.indexOf('</li>', page.indexOf('can-undo')),
+    );
+    expect(item).toContain('<details class="undo-entry">');
+    expect(item).toContain('wpis 3');
+    expect(item).toContain('action="/x/3/cofnij"');
+    expect(item).toContain('Cofnij: Bartek');
+  });
+
+  it('undone entries are crossed out and marked, without a button', () => {
+    expect(page).toMatch(/<li class="reverted"[^>]*>[\s\S]*<s>[\s\S]*wpis 2[\s\S]*<\/s>[\s\S]*cofnięte/);
+    expect(page).not.toContain('/x/2/cofnij');
+    expect(page).not.toContain('/x/1/cofnij');
+  });
+
+  it('without anything to undo there is no undo form', () => {
+    const none = historyList(entries, text, { entryId: null, action: (id) => `/x/${id}`, people }).value;
+    expect(none).not.toContain('undo-entry');
   });
 });
