@@ -93,12 +93,23 @@ describe('layout: okienko „Czy na pewno?”', () => {
     expect(script).toContain('.detail form.people');
   });
 
+  it('when switched off, still asks for forms that undo several entries at once', () => {
+    expect(without).toContain('<dialog id="potwierdz"');
+    expect(without).toContain('data-all="0"');
+    expect(withConfirm).toContain('data-all="1"');
+    const script = without.slice(without.indexOf('<script>'), without.indexOf('</script>'));
+    expect(script).toContain('.detail form.people[data-confirm]');
+  });
+
   it('does not reload the page while the question is open', () => {
     const script = withConfirm.slice(withConfirm.indexOf('<script>'), withConfirm.indexOf('</script>'));
     expect(script).toContain('dialog[open]');
   });
 
-  it('has no window when switched off in Ustawienia', () => {
-    expect(without).not.toContain('<dialog');
+  it('when switched off in Ustawienia, a normal click on a person does not ask', () => {
+    // okienko istnieje, ale skrypt pyta tylko formularze z data-confirm (cofanie kilku wpisów)
+    expect(without).toContain('data-all="0"');
+    const script = without.slice(without.indexOf('<script>'), without.indexOf('</script>'));
+    expect(script).toContain("askAll ? '.detail form.people' : '.detail form.people[data-confirm]'");
   });
 });

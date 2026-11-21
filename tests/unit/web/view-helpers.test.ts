@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { entriesText, describe, it, expect } from 'vitest';
 import { html } from '../../../src/web/html.js';
 import {
   avatar,
@@ -130,5 +130,65 @@ describe('historia z cofaniem', () => {
   it('without anything to undo there is no undo form', () => {
     const none = historyList(entries, text, { entryId: null, action: (id) => `/x/${id}`, people }).value;
     expect(none).not.toContain('undo-entry');
+  });
+});
+
+describe('historia: cofanie do wybranego wpisu (kilka wpisów naraz)', () => {
+  const people = [{ id: 1, name: 'Bartek' }];
+  const entries = [1, 2, 3, 4, 5, 6, 7].map((id) => ({
+    id,
+    person: 'Łukasz',
+    happenedOn: '2026-11-20',
+    reverted: false,
+  }));
+  const text = (h: { id: number }) => html`wpis ${h.id}`;
+  const page = historyList(entries, text, {
+    entryId: 7,
+    olderEntryIds: [6, 5, 4, 3],
+    olderAction: (id) => `/x/${id}/cofnij-do`,
+    action: (id) => `/x/${id}/cofnij`,
+    people,
+  }).value;
+  const itemOf = (id: number) => {
+    const start = page.indexOf(`wpis ${id}`);
+    return page.slice(page.lastIndexOf('<li', start), page.indexOf('</li>', start));
+  };
+
+  it('an older entry offers going back to it and says how many entries it undoes', () => {
+    const item = itemOf(5);
+    expect(item).toContain('cofnij do tego miejsca');
+    expect(item).toContain('action="/x/5/cofnij-do"');
+    expect(item).toContain('Cofnie 3 wpisy (ten i nowsze), tylko w tym zleceniu.');
+    expect(item).toContain('data-label="Cofnij 3 wpisy: Bartek"');
+  });
+
+  it('uses the right Polish form for 5 and more entries', () => {
+    expect(itemOf(3)).toContain('Cofnij 5 wpisów: Bartek');
+  });
+
+  it('going back over several entries always asks "Czy na pewno?"', () => {
+    expect(itemOf(6)).toMatch(/<form[^>]*data-confirm="1"/);
+  });
+
+  it('the newest entry keeps the normal "cofnij"; entries that cannot be reached have no button', () => {
+    expect(itemOf(7)).toContain('action="/x/7/cofnij"');
+    expect(itemOf(7)).not.toContain('cofnij do tego miejsca');
+    expect(itemOf(2)).not.toContain('cofnij');
+    expect(itemOf(1)).not.toContain('cofnij');
+  });
+});
+
+describe('entriesText: polska odmiana liczby wpisów', () => {
+  it.each([
+    [1, '1 wpis'],
+    [2, '2 wpisy'],
+    [4, '4 wpisy'],
+    [5, '5 wpisów'],
+    [12, '12 wpisów'],
+    [14, '14 wpisów'],
+    [22, '22 wpisy'],
+    [25, '25 wpisów'],
+  ])('%i → %s', (count, expected) => {
+    expect(entriesText(count)).toBe(expected);
   });
 });

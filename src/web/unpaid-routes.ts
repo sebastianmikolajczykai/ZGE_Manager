@@ -80,7 +80,7 @@ function renderUnpaid(
       row.urgency,
       s.orders.history(orderId),
       s.people.list(),
-      s.orders.undoableEntryId(orderId),
+      s.orders.undoableEntryIds(orderId),
     );
   }
   return s.pages.send(

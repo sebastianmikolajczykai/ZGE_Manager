@@ -106,6 +106,12 @@ type UndoData = CheckUndoData | LimitUndoData | MeasurementUndoData | PersonUndo
 
 const GROSZE_PER_PLN = 100;
 
+/** Osoba wpisywana przy próbnym cofaniu (nic z tego nie zostaje w bazie). */
+const DRY_RUN_PERSON = 'próba';
+
+/** Sygnał końca próbnego cofania: wycofuje transakcję. */
+class DryRunFinished extends Error {}
+
 /** Zlecenia: tworzenie z szablonu, odhaczanie, „Sprawdzone dziś”, cofanie i historia. */
 export class OrderService {
   private readonly workTypes: WorkTypeRepository;
@@ -307,10 +313,29 @@ export class OrderService {
     return candidate?.id ?? null;
   }
 
+  /**
+   * Wszystkie wpisy, do których da się cofnąć zlecenie (najnowszy pierwszy): próbne cofanie po kolei,
+   * a potem wycofanie zmian z bazy, więc niczego nie zapisuje.
+   */
+  undoableEntryIds(orderId: number): number[] {
+    const ids: number[] = [];
+    try {
+      this.inTransaction(() => {
+        for (let next = this.undoableEntryId(orderId); next !== null; next = this.undoableEntryId(orderId)) {
+          ids.push(next);
+          this.undoOne(orderId, next, DRY_RUN_PERSON);
+        }
+        throw new DryRunFinished();
+      });
+    } catch (err) {
+      if (!(err instanceof DryRunFinished)) throw err;
+    }
+    return ids;
+  }
+
   /** Cofa wpis z historii (przywraca stan sprzed kliknięcia); cofnięcie też trafia do historii. */
   undoEntry(orderId: number, entryId: number, person: string): void {
     const who = requirePerson(person);
-    const order = this.require(orderId);
     const entry = this.historyRows(orderId).find((r) => r.id === entryId);
     if (!entry || entry.reverted === 1 || !isUndoable(entry.action)) {
       throw new Error('Tego wpisu nie można cofnąć');
@@ -318,13 +343,33 @@ export class OrderService {
     if (this.undoableEntryId(orderId) !== entryId) {
       throw new Error('Najpierw cofnij nowsze wpisy w historii (cofamy po kolei, od najnowszego)');
     }
-    const step = order.steps.find((s) => s.position === entry.step_position) ?? null;
+    this.inTransaction(() => this.undoOne(orderId, entryId, who));
+  }
+
+  /**
+   * Cofa zlecenie „do tego momentu”: wskazany wpis i wszystkie nowsze, po kolei od najnowszego,
+   * w jednej transakcji (wszystko albo nic). Inne zlecenia zostają bez zmian. Zwraca liczbę cofniętych wpisów.
+   */
+  undoBackTo(orderId: number, entryId: number, person: string): number {
+    const who = requirePerson(person);
+    const chain = this.undoableEntryIds(orderId);
+    const count = chain.indexOf(entryId) + 1;
+    if (count === 0) throw new Error('Do tego wpisu nie można cofnąć zlecenia');
     this.inTransaction(() => {
-      if (entry.action === 'step_done') return this.revertStepDone(orderId, step as OrderStep, who);
-      this.restore(orderId, entry);
-      this.db.connection.prepare('UPDATE order_history SET reverted = 1 WHERE id = ?').run(entryId);
-      this.log(orderId, who, 'undone', step, undoNote(entry));
+      for (const id of chain.slice(0, count)) this.undoOne(orderId, id, who);
     });
+    return count;
+  }
+
+  /** Cofa jeden wpis (sprawdzony wcześniej jako najnowszy działający). */
+  private undoOne(orderId: number, entryId: number, who: string): void {
+    const order = this.require(orderId);
+    const entry = this.historyRows(orderId).find((r) => r.id === entryId) as HistoryRow;
+    const step = order.steps.find((s) => s.position === entry.step_position) ?? null;
+    if (entry.action === 'step_done') return this.revertStepDone(orderId, step as OrderStep, who);
+    this.restore(orderId, entry);
+    this.db.connection.prepare('UPDATE order_history SET reverted = 1 WHERE id = ?').run(entryId);
+    this.log(orderId, who, 'undone', step, undoNote(entry));
   }
 
   /** Przywraca stan zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit / osoba / data pomiaru). */

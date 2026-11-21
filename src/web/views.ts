@@ -74,7 +74,7 @@ export function layout(
           ${sideMenu(counts, refreshSeconds)}
           <main>${body}</main>
         </div>
-        ${confirmActions ? CONFIRM_DIALOG : ''}
+        ${confirmDialog(confirmActions)}
         <script>
           ${trustedScript(refreshSeconds)};
         </script>
@@ -82,17 +82,22 @@ export function layout(
     </html>`.value;
 }
 
-/** Okienko „Czy na pewno?” na środku ekranu; skrypt strony wpisuje w nie, co ktoś kliknął. */
-const CONFIRM_DIALOG = html`<dialog id="potwierdz" aria-labelledby="potwierdz-tytul">
-  <form method="dialog">
-    <p class="ask-title" id="potwierdz-tytul">Czy na pewno?</p>
-    <p class="ask-what" id="potwierdz-co"></p>
-    <div class="ask-buttons">
-      <button value="anuluj" class="secondary big" autofocus>Anuluj</button>
-      <button value="tak" class="primary big">Tak, zapisz</button>
-    </div>
-  </form>
-</dialog>`;
+/**
+ * Okienko „Czy na pewno?” na środku ekranu; skrypt strony wpisuje w nie, co ktoś kliknął.
+ * data-all="1": pyta przy każdym kliknięciu osoby na karcie (Ustawienia); "0": tylko przy cofaniu kilku wpisów naraz.
+ */
+function confirmDialog(all: boolean): SafeHtml {
+  return html`<dialog id="potwierdz" aria-labelledby="potwierdz-tytul" data-all="${all ? '1' : '0'}">
+    <form method="dialog">
+      <p class="ask-title" id="potwierdz-tytul">Czy na pewno?</p>
+      <p class="ask-what" id="potwierdz-co"></p>
+      <div class="ask-buttons">
+        <button value="anuluj" class="secondary big" autofocus>Anuluj</button>
+        <button value="tak" class="primary big">Tak, zapisz</button>
+      </div>
+    </form>
+  </dialog>`;
+}
 
 /** Menu boczne: logo, żółty przycisk „+ Dodaj zlecenie”, zakładki z licznikami. */
 function sideMenu(counts: NavCounts, refreshSeconds: number): SafeHtml {
@@ -306,8 +311,8 @@ export function orderDetail(
   urgency: Urgency | null,
   history: HistoryEntry[],
   people: Person[],
-  /** Wpis historii, który można teraz cofnąć (null = nic). */
-  undoableId: number | null = null,
+  /** Wpisy historii, do których można cofnąć zlecenie (najnowszy pierwszy). */
+  undoableIds: number[] = [],
 ): SafeHtml {
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
@@ -345,7 +350,7 @@ export function orderDetail(
     </dl>
     <h3>Kroki</h3>
     ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
-    ${historySection(history, orderUndo(order.id, undoableId, people))}
+    ${historySection(history, orderUndo(order.id, undoableIds, people))}
   </section>`;
 }
 
@@ -428,12 +433,14 @@ function stepsSection(order: Order, people: Person[], urgency: Urgency | null): 
 /** Cofanie wpisów historii zlecenia; `fields` = np. ukryte pole „wróć do Niezapłaconych”. */
 export function orderUndo(
   orderId: number,
-  entryId: number | null,
+  undoableIds: number[],
   people: Person[],
   fields?: SafeHtml,
 ): HistoryUndo {
   return {
-    entryId,
+    entryId: undoableIds[0] ?? null,
+    olderEntryIds: undoableIds.slice(1),
+    olderAction: (id) => `/zlecenia/${orderId}/historia/${id}/cofnij-do`,
     action: (id) => `/zlecenia/${orderId}/historia/${id}/cofnij`,
     people,
     ...(fields ? { fields } : {}),
@@ -700,7 +707,8 @@ document.querySelectorAll('.stepper [data-step]').forEach(function (b) {
 });
 // Okienko „Czy na pewno?”: kliknięcie osoby na karcie trzeba potwierdzić drugim kliknięciem „Tak, zapisz”.
 var ask = document.getElementById('potwierdz');
-if (ask) document.querySelectorAll('.detail form.people').forEach(function (form) {
+var askAll = ask && ask.getAttribute('data-all') === '1';
+if (ask) document.querySelectorAll(askAll ? '.detail form.people' : '.detail form.people[data-confirm]').forEach(function (form) {
   form.addEventListener('submit', function (e) {
     if (form.getAttribute('data-confirmed') === '1') return;
     e.preventDefault();
@@ -865,6 +873,9 @@ div.people { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
 .history li.can-undo { display:block; } .undo-entry > summary { list-style:none; display:flex; gap:8px; align-items:center; flex-wrap:wrap; cursor:pointer; padding:4px 8px; margin:0 -8px; border-radius:8px; border:1px dashed var(--red-ink); color:var(--ink); }
 .undo-entry > summary::-webkit-details-marker { display:none; } .undo-entry > summary:hover, .undo-entry[open] > summary { background:var(--red); }
 .undo-hint { margin-left:auto; color:var(--red-ink); font-weight:700; font-size:13px; white-space:nowrap; } .undo-entry[open] { padding-bottom:6px; }
+/* Starsze wpisy („cofnij do tego miejsca”): spokojniejsze, ramka dopiero po najechaniu. */
+.back-to .undo-entry > summary { border-color:transparent; } .back-to .undo-entry > summary:hover, .back-to .undo-entry[open] > summary { border-color:var(--red-ink); }
+.back-to .undo-hint { font-weight:600; opacity:.7; }
 .recent-head { font-size:17px; margin:22px 0 6px; } .recent { list-style:none; padding:0; margin:0; background:var(--card); border-radius:14px; box-shadow:var(--shadow); }
 .recent li { display:flex; gap:10px; align-items:baseline; padding:8px 12px; border-top:1px solid var(--line); } .recent li:first-child { border-top:0; }
 .recent li span { color:var(--muted); } .recent li small { margin-left:auto; color:var(--muted); } .hint { color:var(--muted); font-size:14px; }

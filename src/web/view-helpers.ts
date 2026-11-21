@@ -11,9 +11,12 @@ export function personButtons(
   people: Person[],
   style: string,
   fields: SafeHtml | null = null,
+  alwaysConfirm = false,
 ): SafeHtml {
   if (people.length === 0) return html`<p class="error">Dodaj osoby w Ustawieniach.</p>`;
-  return html`<form method="post" action="${action}" class="people">
+  // data-confirm: okienko „Czy na pewno?” nawet wtedy, gdy w Ustawieniach jest wyłączone.
+  const confirm = alwaysConfirm ? html` data-confirm="1"` : '';
+  return html`<form method="post" action="${action}" class="people" ${confirm}>
     ${fields}
     ${people.map(
       (p) =>
@@ -125,11 +128,15 @@ export interface HistoryUndo {
   people: Person[];
   /** Dodatkowe ukryte pola formularza (np. skąd wrócić). */
   fields?: SafeHtml;
+  /** Starsze wpisy, do których da się cofnąć naraz (od najnowszego), i dokąd wysłać takie cofnięcie. */
+  olderEntryIds?: number[];
+  olderAction?: (entryId: number) => string;
 }
 
 /**
  * Historia „kto, co, kiedy” (najnowsze na górze). Najnowszy działający wpis klika się,
- * żeby go cofnąć; cofnięte wpisy są przekreślone.
+ * żeby go cofnąć; starsze (z `olderEntryIds`) pozwalają cofnąć się do nich, kilka wpisów naraz.
+ * Cofnięte wpisy są przekreślone.
  */
 export function historyList<T extends HistoryItem>(
   entries: T[],
@@ -137,20 +144,56 @@ export function historyList<T extends HistoryItem>(
   undo: HistoryUndo,
 ): SafeHtml {
   const line = (h: T) => html`${avatar(h.person)}<time>${formatDate(h.happenedOn)}</time> ${text(h)}`;
+  const older = undo.olderEntryIds ?? [];
   const item = (h: T) => {
     if (h.reverted) return html`<li class="reverted"><s>${line(h)}</s> <small>(cofnięte)</small></li>`;
-    if (h.id !== undo.entryId) return html`<li>${line(h)}</li>`;
-    return html`<li class="can-undo">
-      <details class="undo-entry">
-        <summary>
-          ${line(h)} <span class="undo-hint"><span aria-hidden="true">↶</span> cofnij</span>
-        </summary>
-        <p class="who-asks">Kto cofa? Kliknij swoje imię:</p>
-        ${personButtons(undo.action(h.id), 'Cofnij', undo.people, 'danger', undo.fields ?? null)}
-      </details>
-    </li>`;
+    if (h.id === undo.entryId) {
+      return undoItem(line(h), 'cofnij', 'Kto cofa? Kliknij swoje imię:', () =>
+        personButtons(undo.action(h.id), 'Cofnij', undo.people, 'danger', undo.fields ?? null),
+      );
+    }
+    const index = older.indexOf(h.id);
+    if (index < 0 || !undo.olderAction) return html`<li>${line(h)}</li>`;
+    // +2: ten wpis i najnowszy (który nie jest na liście starszych)
+    const count = entriesText(index + 2);
+    const action = undo.olderAction(h.id);
+    return undoItem(
+      line(h),
+      'cofnij do tego miejsca',
+      `Cofnie ${count} (ten i nowsze), tylko w tym zleceniu. Kto cofa? Kliknij swoje imię:`,
+      () => personButtons(action, `Cofnij ${count}`, undo.people, 'danger', undo.fields ?? null, true),
+      true,
+    );
   };
   return html`<ul class="history">
     ${[...entries].reverse().map(item)}
   </ul>`;
+}
+
+/** Wpis historii, który po kliknięciu rozwija przyciski cofania. */
+function undoItem(
+  line: SafeHtml,
+  hint: string,
+  ask: string,
+  buttons: () => SafeHtml,
+  older = false,
+): SafeHtml {
+  return html`<li class="can-undo${older ? ' back-to' : ''}">
+    <details class="undo-entry">
+      <summary>
+        ${line} <span class="undo-hint"><span aria-hidden="true">↶</span> ${hint}</span>
+      </summary>
+      <p class="who-asks">${ask}</p>
+      ${buttons()}
+    </details>
+  </li>`;
+}
+
+/** „1 wpis”, „3 wpisy”, „5 wpisów”, „22 wpisy” (polska odmiana). */
+export function entriesText(count: number): string {
+  const lastDigit = count % 10;
+  const lastTwo = count % 100;
+  if (count === 1) return '1 wpis';
+  const few = lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14);
+  return `${count} ${few ? 'wpisy' : 'wpisów'}`;
 }

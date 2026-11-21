@@ -77,9 +77,10 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
   });
 
   it('the "Czy na pewno?" window is on by default and can be switched off in Ustawienia', async () => {
-    expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('<dialog id="potwierdz"');
+    expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('data-all="1"');
     await saveThresholds({ confirmActions: '' });
-    expect((await app.inject({ method: 'GET', url: '/' })).body).not.toContain('<dialog id="potwierdz"');
+    // okienko zostaje tylko dla cofania kilku wpisów naraz
+    expect((await app.inject({ method: 'GET', url: '/' })).body).toContain('data-all="0"');
   });
 
   it('saves a change, shows the new value and logs who changed it', async () => {

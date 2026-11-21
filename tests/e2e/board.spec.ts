@@ -100,3 +100,35 @@ test('kroki do zrobienia można zwinąć i rozwinąć', async ({ page }) => {
   await panel.getByText(/^Do zrobienia \(\d+\)$/).click();
   await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeVisible();
 });
+
+test('cofanie do wybranego wpisu historii: kilka kroków naraz, z pytaniem „Czy na pewno?”', async ({
+  page,
+}) => {
+  const client = `Cofanie do wpisu E2E ${Date.now()}`;
+  await page.goto('/zlecenia/nowe');
+  await page.getByLabel('Klient').fill(client);
+  await page.getByLabel('Telefon').fill('600 100 200');
+  await page.getByLabel('Miejscowość').fill('Przykładowo');
+  await page.getByLabel('Rodzaj pracy').selectOption({ label: 'Podział nieruchomości' });
+  await page.getByLabel('Data pomiaru').fill('2030-01-15');
+  await page.getByLabel('Kto przyjął').selectOption('Łukasz');
+  await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+
+  const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
+  await panel.getByText(/^Historia \(\d+\)$/).click();
+  for (let done = 1; done <= 3; done++) {
+    await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }));
+    await expect(panel.getByText(`Zrobione kroki (${done})`)).toBeVisible();
+  }
+
+  await panel.getByText('Bartek: zrobione „Analiza materiałów w urzędzie”').click();
+  await expect(panel.getByText('Cofnie 2 wpisy (ten i nowsze), tylko w tym zleceniu.')).toBeVisible();
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Cofnij 2 wpisy: Łukasz' }));
+
+  await expect(panel.getByText('Zrobione kroki (1)')).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
+    'Analiza materiałów w urzędzie',
+  );
+  await expect(panel.getByText('Łukasz: cofnięcie „Wysłanie zawiadomień”')).toBeVisible();
+  await expect(panel.getByText('Łukasz: cofnięcie „Analiza materiałów w urzędzie”')).toBeVisible();
+});

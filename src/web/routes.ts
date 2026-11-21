@@ -214,25 +214,30 @@ function valuesFromOffer(o: NonNullable<ReturnType<OfferService['get']>>): Order
 }
 
 /**
- * Cofnięcie wpisu z historii zlecenia. Z karty w Niezapłaconych (pole „widok”) wracamy tam,
- * jeśli zlecenie nadal czeka na zapłatę; w innym razie na kartę zlecenia.
+ * Cofnięcie wpisu z historii zlecenia („cofnij” = najnowszy wpis, „cofnij-do” = ten wpis i wszystkie nowsze).
+ * Z karty w Niezapłaconych (pole „widok”) wracamy tam, jeśli zlecenie nadal czeka na zapłatę; w innym razie na kartę zlecenia.
  */
 function registerHistoryUndo(app: FastifyInstance, s: WebServices): void {
-  app.post('/zlecenia/:id/historia/:entry/cofnij', (req, reply) => {
-    const params = req.params as Form;
-    const form = req.body as Form;
-    const orderId = Number(params.id);
-    try {
-      s.orders.undoEntry(orderId, Number(params.entry), form.person ?? '');
-      const stillUnpaid = s.payments.rows().some((r) => r.orderId === orderId);
-      const back =
-        form.widok === 'niezaplacone' && stillUnpaid
-          ? `/niezaplacone?zlecenie=${orderId}`
-          : `/?zlecenie=${orderId}`;
-      return reply.redirect(back, HTTP_SEE_OTHER);
-    } catch (err) {
-      return renderBoard(reply, s, s.orders.get(orderId) ? orderId : null, message(err), HTTP_BAD_REQUEST);
-    }
+  const undoRoute = (url: string, undo: (orderId: number, entryId: number, person: string) => void) =>
+    app.post(url, (req, reply) => {
+      const params = req.params as Form;
+      const form = req.body as Form;
+      const orderId = Number(params.id);
+      try {
+        undo(orderId, Number(params.entry), form.person ?? '');
+        const stillUnpaid = s.payments.rows().some((r) => r.orderId === orderId);
+        const back =
+          form.widok === 'niezaplacone' && stillUnpaid
+            ? `/niezaplacone?zlecenie=${orderId}`
+            : `/?zlecenie=${orderId}`;
+        return reply.redirect(back, HTTP_SEE_OTHER);
+      } catch (err) {
+        return renderBoard(reply, s, s.orders.get(orderId) ? orderId : null, message(err), HTTP_BAD_REQUEST);
+      }
+    });
+  undoRoute('/zlecenia/:id/historia/:entry/cofnij', (o, e, who) => s.orders.undoEntry(o, e, who));
+  undoRoute('/zlecenia/:id/historia/:entry/cofnij-do', (o, e, who) => {
+    s.orders.undoBackTo(o, e, who);
   });
 }
 
@@ -269,7 +274,7 @@ function renderBoard(
       urgency,
       s.orders.history(orderId),
       s.people.list(),
-      s.orders.undoableEntryId(orderId),
+      s.orders.undoableEntryIds(orderId),
     );
   }
   return s.pages.send(
