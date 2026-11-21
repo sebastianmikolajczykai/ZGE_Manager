@@ -20,6 +20,7 @@ import type { DaysOff } from '../modules/settings/days-off-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin.js';
 import { workTypesSection } from './work-type-views.js';
+import { appearanceChoice } from './theme.js';
 import { messageSettingsSection, type MessageSettingsView } from './message-views.js';
 
 /** Potwierdzenie po zapisie: ile pól się zmieniło i kto zapisał. */
@@ -71,7 +72,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
       ><a href="#dni-wolne">🏖 Dni wolne</a><a href="#wiadomosc">✉️ Wiadomość SMS</a
       ><a href="#osoby">👥 Osoby</a>
     </nav>
-    ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
+    ${appearanceChoice()} ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <p class="settings-hint"><small>Kliknij nazwę sekcji, żeby ją rozwinąć albo zwinąć.</small></p>
     ${section('kolory', 'Kolory i przypomnienia', null, coloursSection(people, view), open)}
     ${section(

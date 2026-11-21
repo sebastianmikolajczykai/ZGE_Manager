@@ -78,6 +78,21 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
     }
   });
 
+  it('has the light / dark switch at the top, visible without opening any section', async () => {
+    const page = oneLine(await settingsPage());
+    const group = page.match(
+      /<div class="appearance" role="group" aria-label="Wygląd ekranu">.*?<\/div>/,
+    )?.[0];
+    expect(group).toBeDefined();
+    expect(group).toMatch(
+      /<button type="button"[^>]*data-motyw="jasny"[^>]*aria-pressed="true"[^>]*>☀️ Jasny/,
+    );
+    expect(group).toMatch(
+      /<button type="button"[^>]*data-motyw="ciemny"[^>]*aria-pressed="false"[^>]*>🌙 Ciemny/,
+    );
+    expect(page.indexOf('class="appearance"')).toBeLessThan(page.indexOf('class="fold settings-section"'));
+  });
+
   it('section titles show how many items are inside', async () => {
     const page = await settingsPage();
     expect(page).toMatch(/<h3>Rodzaje prac <small class="count">\(\d+\)<\/small><\/h3>/);

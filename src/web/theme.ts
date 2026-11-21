@@ -21,16 +21,27 @@ const THEME_SCRIPT = `
     if (dark) root.setAttribute('data-theme', 'dark'); else root.removeAttribute('data-theme');
     var btn = document.getElementById('motyw');
     if (btn) btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    // Przyciski „Jasny” / „Ciemny” w Ustawieniach: wciśnięty ten, który pasuje do trybu.
+    document.querySelectorAll('[data-motyw]').forEach(function (b) {
+      b.setAttribute('aria-pressed', (b.getAttribute('data-motyw') === DARK) === dark ? 'true' : 'false');
+    });
+  }
+  function save(dark) {
+    try { if (dark) localStorage.setItem(KEY, DARK); else localStorage.removeItem(KEY); } catch (err) { /* prywatne okno: wybór działa do zamknięcia strony */ }
   }
   var saved = null;
   try { saved = localStorage.getItem(KEY); } catch (e) { saved = null; }
   apply(saved === DARK);
   document.addEventListener('DOMContentLoaded', function () { apply(root.getAttribute('data-theme') === 'dark'); });
   document.addEventListener('click', function (e) {
-    if (!e.target.closest || !e.target.closest('#motyw')) return;
-    var dark = root.getAttribute('data-theme') !== 'dark';
+    if (!e.target.closest) return;
+    var choice = e.target.closest('[data-motyw]');
+    var dark;
+    if (choice) dark = choice.getAttribute('data-motyw') === DARK;
+    else if (e.target.closest('#motyw')) dark = root.getAttribute('data-theme') !== 'dark';
+    else return;
     apply(dark);
-    try { if (dark) localStorage.setItem(KEY, DARK); else localStorage.removeItem(KEY); } catch (err) { /* prywatne okno: wybór działa do zamknięcia strony */ }
+    save(dark);
   });
 })();`;
 
@@ -42,6 +53,15 @@ export function themeToggle(): SafeHtml {
   return html`<button type="button" class="theme-toggle" id="motyw" aria-pressed="false">
     <span class="ic" aria-hidden="true">🌙</span>Tryb ciemny<span class="switch" aria-hidden="true"></span>
   </button>`;
+}
+
+/** Ustawienia → Wygląd ekranu: dwa przyciski, zawsze widoczne (bez rozwijania sekcji). */
+export function appearanceChoice(): SafeHtml {
+  return html`<div class="appearance" role="group" aria-label="Wygląd ekranu">
+    <span class="appearance-label">Wygląd ekranu:</span
+    ><button type="button" class="choice" data-motyw="jasny" aria-pressed="true">☀️ Jasny</button
+    ><button type="button" class="choice" data-motyw="${DARK_VALUE}" aria-pressed="false">🌙 Ciemny</button>
+  </div>`;
 }
 
 /**
@@ -56,6 +76,12 @@ export const THEME_STYLES = `
 .theme-toggle .switch::after { content:''; position:absolute; top:3px; left:3px; width:14px; height:14px; border-radius:50%; background:#d1fae5; transition:left .15s; }
 .theme-toggle[aria-pressed="true"] .switch { background:var(--add); }
 .theme-toggle[aria-pressed="true"] .switch::after { left:17px; background:#1f2937; }
+/* Ustawienia → Wygląd ekranu: dwa przyciski jak przełącznik; wciśnięty ma kolor marki. */
+.appearance { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 4px; }
+.appearance-label { font-weight:700; margin-right:4px; }
+.appearance .choice { padding:8px 16px; border-radius:999px; border:2px solid var(--line); background:var(--card); color:var(--ink); font-size:16px; font-weight:600; cursor:pointer; }
+.appearance .choice:hover { border-color:var(--brand); }
+.appearance .choice[aria-pressed="true"] { border-color:var(--brand); background:var(--green); color:var(--green-ink); }
 /* Tryb ciemny: te same zmienne co w stylu C, ciemne tło i jasny tekst. */
 :root[data-theme="dark"] { color-scheme:dark; --ink:#e5e7eb; --muted:#9ca3af; --line:#374151; --bg:#0d1512; --card:#18221e;
   --brand-dark:#4ade80; --side:#0a2416; --select:#60a5fa;

@@ -26,6 +26,11 @@ describe('tryb jasny i ciemny', () => {
     expect(themeScript).not.toMatch(/&amp;|&#39;|&quot;/);
   });
 
+  it('the script also handles the "Jasny" / "Ciemny" buttons in Ustawienia and keeps them in sync', () => {
+    expect(themeScript).toContain('[data-motyw]');
+    expect(themeScript).toContain("getAttribute('data-motyw')");
+  });
+
   it('a blocked browser storage (private window) does not break the page', () => {
     expect(themeScript).toMatch(/try\s*\{/);
   });

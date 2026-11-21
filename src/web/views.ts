@@ -894,7 +894,8 @@ details.fold > summary:hover { color:var(--brand); }
 /* Ustawienia: etykieta z podpowiedzią po lewej, pole po prawej. */
 details.settings-section { margin:0; border-top:1px solid var(--line); }
 details.settings-section > summary { display:flex; align-items:center; padding:14px 0; scroll-margin-top:12px; }
-details.settings-section > summary h3 { margin:0; font-size:20px; } details.settings-section > summary h3 .count { color:var(--muted); font-weight:600; }
+details.settings-section > summary::before { flex:none; }
+details.settings-section > summary h3 { margin:0; padding:0; border:0; font-size:20px; } details.settings-section > summary h3 .count { color:var(--muted); font-weight:600; }
 details.settings-section > .section-body { padding:0 0 16px; } .settings-hint { margin:6px 0 4px; color:var(--muted); }
 .settings-nav { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px; } .settings-nav a { padding:7px 14px; border-radius:999px; background:var(--green); color:var(--green-ink); text-decoration:none; font-weight:600; font-size:15px; }
 .form-page h3 { font-size:19px; margin:26px 0 6px; padding-top:14px; border-top:1px solid var(--line); scroll-margin-top:12px; }
