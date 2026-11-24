@@ -33,6 +33,8 @@ Gdy aplikacja nie wstaje, przyczyna jest zapisana w pliku `dane\serwer.log`.
 Aplikacja sama robi jedną kopię bazy dziennie: zaraz po uruchomieniu i potem sprawdza co godzinę, czy dzisiejsza kopia już jest.
 Kopie mają nazwy z datą, np. `zge-2026-11-24.db`. Trzymanych jest **30 ostatnich**, starsze są usuwane same.
 
+Przy aktualizacji programu, która zmienia budowę bazy, aplikacja przed zmianą robi dodatkową kopię `zge-przed-aktualizacja-RRRR-MM-DD.db` w tym samym folderze. Tych kopii nic nie usuwa samo; można je skasować ręcznie, gdy wszystko działa.
+
 Domyślnie kopie trafiają do `dane\kopie`, czyli na ten sam dysk. Żeby przetrwały awarię laptopa, wskaż folder w OneDrive lub na innym dysku:
 
 1. W folderze aplikacji skopiuj plik `.env.example` i nazwij kopię `.env`.

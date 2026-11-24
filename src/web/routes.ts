@@ -328,7 +328,8 @@ function renderBoard(
         HTTP_NOT_FOUND,
       );
     const active = order.steps.find((st) => st.status === 'active');
-    const urgency = active ? s.board.urgencyOf(order, active, s.today()) : null;
+    const stepColours = s.board.stepUrgencies(order, s.today());
+    const urgency = s.board.orderUrgency(order, s.today());
     const workType = s.workTypes.findById(order.workTypeId)?.name ?? '?';
     detail = orderDetail(
       order,
@@ -338,6 +339,7 @@ function renderBoard(
       s.people.list(),
       s.orders.undoableEntryIds(orderId),
       active?.payment ? paymentMessageBox(paymentText(s, order), order.phone) : null,
+      stepColours,
     );
   }
   return s.pages.send(

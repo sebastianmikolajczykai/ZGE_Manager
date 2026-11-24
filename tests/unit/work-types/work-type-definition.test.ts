@@ -153,3 +153,56 @@ describe('default "Podział nieruchomości" template', () => {
     ]);
   });
 });
+
+describe('validateWorkType: kroki równoległe', () => {
+  const parallelB: StepTemplate = {
+    name: 'Krok B',
+    kind: 'own',
+    limitDays: 2,
+    provisional: false,
+    parallel: true,
+  };
+
+  it('accepts a step that runs in parallel with the previous one', () => {
+    expect(() => validateWorkType({ name: 'Równoległe', steps: [stepA, parallelB] })).not.toThrow();
+  });
+
+  it('rejects the first step marked as parallel (there is no previous step)', () => {
+    const steps = [{ ...stepA, parallel: true }, parallelB];
+    expect(() => validateWorkType({ name: 'Zły', steps })).toThrow(/Krok 1.*równoleg/);
+  });
+
+  it('rejects a payment step marked as parallel', () => {
+    const payment: StepTemplate = {
+      name: 'Zapłata',
+      kind: 'waiting',
+      limitDays: 14,
+      provisional: false,
+      payment: true,
+      parallel: true,
+    };
+    expect(() => validateWorkType({ name: 'Zły', steps: [stepA, payment] })).toThrow(/zapłaty.*równoleg/i);
+  });
+
+  it('rejects a step running in parallel with the payment step', () => {
+    const payment: StepTemplate = {
+      name: 'Zapłata',
+      kind: 'waiting',
+      limitDays: 14,
+      provisional: false,
+      payment: true,
+    };
+    expect(() => validateWorkType({ name: 'Zły', steps: [stepA, payment, parallelB] })).toThrow(
+      /zapłaty.*równoleg/i,
+    );
+  });
+
+  it('the default "Podział" template runs "Analiza materiałów" in parallel with "Ustalenie terminu pomiaru"', () => {
+    const podzial = DEFAULT_WORK_TYPES.find((w) => w.name === 'Podział nieruchomości');
+    const [first, second, third] = podzial?.steps ?? [];
+    expect(first).toMatchObject({ name: 'Ustalenie terminu pomiaru w terenie', limitDays: 2 });
+    expect(first?.parallel ?? false).toBe(false);
+    expect(second).toMatchObject({ name: 'Analiza materiałów w urzędzie', limitDays: 2, parallel: true });
+    expect(third?.parallel ?? false).toBe(false);
+  });
+});

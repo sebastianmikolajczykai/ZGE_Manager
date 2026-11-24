@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import path from 'node:path';
 import type { AppDatabase } from '../db.js';
 import type { LocalDate } from '../modules/urgency/day-counter.js';
-import { backupFileName, backupsToDelete } from './backup-plan.js';
+import { backupFileName, backupsToDelete, updateBackupFileName } from './backup-plan.js';
 
 export type BackupResult = 'created' | 'already-done';
 
@@ -28,6 +28,18 @@ export class DatabaseBackup {
     renameSync(unfinished, target);
     this.removeOldCopies();
     return 'created';
+  }
+
+  /**
+   * Kopia przed aktualizacją schematu (migracją), robiona od razu i synchronicznie, zanim baza się zmieni.
+   * Nazwa inna niż kopii dziennych, więc automatyczne sprzątanie nigdy jej nie usuwa. Zwraca ścieżkę kopii.
+   */
+  copyBeforeUpdate(today: LocalDate): string {
+    mkdirSync(this.dir, { recursive: true });
+    let target = path.join(this.dir, updateBackupFileName(today, 1));
+    for (let n = 2; existsSync(target); n++) target = path.join(this.dir, updateBackupFileName(today, n));
+    this.db.connection.prepare('VACUUM INTO ?').run(target);
+    return target;
   }
 
   private removeOldCopies(): void {

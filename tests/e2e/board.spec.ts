@@ -21,7 +21,7 @@ test('cała ścieżka: dodanie zlecenia, odhaczenie z wyborem osoby, cofnięcie,
 
   // Historia jest zwinięta; po rozwinięciu przeglądarka pamięta to także po przeładowaniu strony.
   await panel.getByText(/^Historia \(\d+\)$/).click();
-  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }));
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }).first());
   await expect(panel.getByText('Zrobione kroki (1)')).toBeVisible();
   await expect(panel.getByText('Bartek: zrobione „Ustalenie terminu pomiaru w terenie”')).toBeVisible();
   await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText(
@@ -76,14 +76,14 @@ test('okienko „Czy na pewno?”: Anuluj nic nie zapisuje, „Tak, zapisz” od
   await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
 
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
-  await panel.getByRole('button', { name: 'Zrobione: Bartek' }).click();
+  await panel.getByRole('button', { name: 'Zrobione: Bartek' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Czy na pewno?' });
   await expect(dialog).toContainText('Zrobione: Bartek');
   await dialog.getByRole('button', { name: 'Anuluj' }).click();
   await expect(dialog).toBeHidden();
   await expect(panel.getByText('Zrobione kroki')).toHaveCount(0);
 
-  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }));
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }).first());
   await expect(panel.getByText('Zrobione kroki (1)')).toBeVisible();
 });
 
@@ -96,9 +96,9 @@ test('kroki do zrobienia można zwinąć i rozwinąć', async ({ page }) => {
   await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
 
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
-  await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeHidden();
+  await expect(panel.getByText('Wysłanie zawiadomień', { exact: true })).toBeHidden();
   await panel.getByText(/^Do zrobienia \(\d+\)$/).click();
-  await expect(panel.getByText('Analiza materiałów w urzędzie', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Wysłanie zawiadomień', { exact: true })).toBeVisible();
 });
 
 test('cofanie do wybranego wpisu historii: kilka kroków naraz, z pytaniem „Czy na pewno?”', async ({
@@ -117,7 +117,7 @@ test('cofanie do wybranego wpisu historii: kilka kroków naraz, z pytaniem „Cz
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   await panel.getByText(/^Historia \(\d+\)$/).click();
   for (let done = 1; done <= 3; done++) {
-    await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }));
+    await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Bartek' }).first());
     await expect(panel.getByText(`Zrobione kroki (${done})`)).toBeVisible();
   }
 
@@ -131,4 +131,32 @@ test('cofanie do wybranego wpisu historii: kilka kroków naraz, z pytaniem „Cz
   );
   await expect(panel.getByText('Łukasz: cofnięcie „Wysłanie zawiadomień”')).toBeVisible();
   await expect(panel.getByText('Łukasz: cofnięcie „Analiza materiałów w urzędzie”')).toBeVisible();
+});
+
+test('kroki równoległe: dwa przyciski „Zrobione”, następny krok rusza po odhaczeniu obu', async ({
+  page,
+}) => {
+  const client = `Równoległe E2E ${Date.now()}`;
+  await page.goto('/zlecenia/nowe');
+  await page.getByLabel('Klient').fill(client);
+  await page.getByLabel('Telefon').fill('600 100 200');
+  await page.getByLabel('Miejscowość').fill('Przykładowo');
+  await page.getByLabel('Rodzaj pracy').selectOption({ label: 'Podział nieruchomości' });
+  await page.getByLabel('Kto przyjął').selectOption('Łukasz');
+  await page.getByRole('button', { name: 'Zapisz zlecenie' }).click();
+
+  const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
+  const row = page.getByRole('row', { name: new RegExp(client) });
+  await expect(row).toContainText('Ustalenie terminu pomiaru w terenie + Analiza materiałów w urzędzie');
+  const analysis = panel.locator('li.step.active', { hasText: 'Analiza materiałów w urzędzie' });
+  await expect(analysis).toContainText('równolegle');
+
+  await clickAndConfirm(page, analysis.getByRole('button', { name: 'Zrobione: Bartek' }));
+  await expect(panel.locator('li.step.active')).toHaveCount(1);
+  await expect(row).toContainText('Ustalenie terminu pomiaru w terenie');
+  await expect(row).not.toContainText('Wysłanie zawiadomień');
+
+  await clickAndConfirm(page, panel.getByRole('button', { name: 'Zrobione: Łukasz' }));
+  await expect(panel.getByText('Zrobione kroki (2)')).toBeVisible();
+  await expect(row).toContainText('Wysłanie zawiadomień');
 });

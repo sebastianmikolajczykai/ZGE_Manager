@@ -13,6 +13,11 @@ if (existsSync(ENV_FILE)) process.loadEnvFile(ENV_FILE);
 
 const cfg = loadConfig(process.env);
 const db = AppDatabase.open(cfg.dbPath);
+// Przed aktualizacją schematu bazy z danymi: osobna kopia (nie demo, nie nowa pusta baza).
+if (!cfg.demo && db.hasData() && db.pendingMigrations().length > 0) {
+  const copy = new DatabaseBackup(db, cfg.backupDir, cfg.backupKeep).copyBeforeUpdate(warsawDate());
+  console.log(`Aktualizacja bazy: kopia sprzed zmian w ${copy}`);
+}
 db.migrate();
 const app = buildApp({ db });
 if (cfg.demo) seedDemo(db, warsawDate()); // tylko demo: zmyślone zlecenia w pustej bazie

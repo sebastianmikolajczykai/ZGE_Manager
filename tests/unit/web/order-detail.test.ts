@@ -19,6 +19,7 @@ function step(position: number, status: OrderStep['status']): OrderStep {
     lastCheckedOn: null,
     lastCheckedBy: null,
     assignee: null,
+    parallel: false,
   };
 }
 
@@ -328,5 +329,56 @@ describe('karta zlecenia: osoba prowadząca i osoby kroków', () => {
     const page = orderDetail(order([step(1, 'active')]), 'Podział', null, entries, PEOPLE).value;
     expect(page).toContain('Bartek: osoba prowadząca (brak → Marcelina)');
     expect(page).toContain('Bartek: osoba do kroku „Krok 2” (brak → Bartek)');
+  });
+});
+
+describe('karta zlecenia: kroki równoległe', () => {
+  const parallel = (s: OrderStep): OrderStep => ({ ...s, parallel: true });
+  const steps = [step(1, 'active'), parallel(step(2, 'active')), step(3, 'pending')];
+  const colours = new Map([
+    [1, { colour: 'red' as const, daysOverdue: 2, blink: false }],
+    [2, { colour: 'green' as const, daysOverdue: 0, blink: false }],
+  ]);
+  const page = orderDetail(
+    order(steps),
+    'Podział',
+    colours.get(1) ?? null,
+    HISTORY,
+    PEOPLE,
+    [],
+    null,
+    colours,
+  ).value;
+  const item = (position: number) => {
+    const start = page.indexOf(`<li value="${position}"`);
+    return page.slice(start, page.indexOf('</li>', start));
+  };
+
+  it('shows two separate "Zrobione" buttons, one for each running step', () => {
+    expect(item(1)).toContain('/zlecenia/7/kroki/1/zrobione');
+    expect(item(2)).toContain('/zlecenia/7/kroki/2/zrobione');
+  });
+
+  it('each running step shows its own colour and lateness', () => {
+    expect(item(1)).toContain('chip-red');
+    expect(item(1)).toContain('2 dni po terminie');
+    expect(item(2)).toContain('chip-green');
+    expect(item(2)).not.toContain('po terminie');
+  });
+
+  it('marks the steps as running at the same time', () => {
+    expect(item(1)).toContain('równolegle');
+    expect(item(2)).toContain('równolegle');
+  });
+
+  it('a single running step looks as before (no extra colour chip, no "równolegle")', () => {
+    const single = orderDetail(
+      order([step(1, 'active'), step(2, 'pending')]),
+      'Podział',
+      null,
+      HISTORY,
+      PEOPLE,
+    ).value;
+    expect(single).not.toContain('równolegle');
   });
 });

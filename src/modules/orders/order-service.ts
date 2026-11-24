@@ -4,6 +4,7 @@ import type { StepKind } from '../work-types/work-type-definition.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
 import { parseMeasurementDate, parseOrderInput, type OrderInput } from './order-input.js';
 import { optional, requirePerson } from '../common/form-fields.js';
+import { firstGroup, groupOf, nextGroup } from './step-groups.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
 export type HistoryAction =
@@ -33,6 +34,8 @@ export interface OrderStep {
   lastCheckedBy: string | null;
   /** Osoba przypisana do kroku; null = krok należy do osoby prowadzącej zlecenie. */
   assignee: string | null;
+  /** Krok idzie w tym samym czasie co poprzedni (krok równoległy). */
+  parallel: boolean;
 }
 
 export interface Order extends Omit<OrderInput, 'workTypeId'> {
@@ -53,10 +56,16 @@ export interface PeopleAssignment {
 
 const NOBODY = 'brak';
 
-/** Do kogo należy bieżący krok: osoba przypisana do kroku, a gdy jej nie ma, prowadzący zlecenie. */
-export function currentOwner(order: Order): string | null {
-  const active = order.steps.find((st) => st.status === 'active');
-  return active?.assignee ?? order.leadPerson;
+/**
+ * Do kogo należą bieżące kroki (przy krokach równoległych może być kilka osób):
+ * osoba przypisana do kroku, a gdy jej nie ma, prowadzący zlecenie. Bez powtórzeń, w kolejności kroków.
+ */
+export function currentOwners(order: Order): string[] {
+  const owners = order.steps
+    .filter((st) => st.status === 'active')
+    .map((st) => st.assignee ?? order.leadPerson)
+    .filter((name): name is string => name !== null);
+  return [...new Set(owners)];
 }
 
 export interface HistoryEntry {
@@ -154,11 +163,12 @@ export class OrderService {
           ).lastInsertRowid,
       );
       const insertStep = this.db.connection.prepare(
-        `INSERT INTO order_steps (order_id, position, name, kind, limit_days, provisional, payment, status, started_on)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO order_steps (order_id, position, name, kind, limit_days, provisional, payment, parallel, status, started_on)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
+      const startNow = firstGroup(workType.steps);
       for (const s of workType.steps) {
-        const first = s.position === 1;
+        const first = startNow.includes(s.position);
         insertStep.run(
           id,
           s.position,
@@ -167,6 +177,7 @@ export class OrderService {
           s.limitDays,
           s.provisional ? 1 : 0,
           s.payment ? 1 : 0,
+          s.parallel ? 1 : 0,
           first ? 'active' : 'pending',
           first ? today : null,
         );
@@ -176,28 +187,42 @@ export class OrderService {
     });
   }
 
+  /**
+   * Odhacza krok. Następny krok (albo grupa kroków równoległych) startuje dopiero, gdy wszystkie
+   * kroki z grupy tego kroku są zrobione; po ostatniej grupie zlecenie jest zakończone.
+   */
   completeStep(orderId: number, position: number, person: string): void {
     const who = requirePerson(person);
+    const order = this.require(orderId);
     const step = this.requireActiveStep(orderId, position);
     const today = this.today();
+    const othersOpen = groupOf(order.steps, position).some(
+      (p) => p !== position && order.steps.find((s) => s.position === p)?.status !== 'done',
+    );
     this.inTransaction(() => {
       this.db.connection
         .prepare(
           "UPDATE order_steps SET status = 'done', done_on = ?, done_by = ? WHERE order_id = ? AND position = ?",
         )
         .run(today, who, orderId, position);
-      const next = this.db.connection
-        .prepare(
-          "UPDATE order_steps SET status = 'active', started_on = ? WHERE order_id = ? AND position = ?",
-        )
-        .run(today, orderId, position + 1);
-      if (next.changes === 0) {
-        this.db.connection
-          .prepare("UPDATE orders SET status = 'completed', completed_on = ? WHERE id = ?")
-          .run(today, orderId);
-      }
+      if (!othersOpen) this.startNextGroup(order, position, today);
       this.log(orderId, who, 'step_done', step);
     });
+  }
+
+  /** Uruchamia grupę po grupie wskazanego kroku; gdy jej nie ma, kończy zlecenie. */
+  private startNextGroup(order: Order, position: number, today: LocalDate): void {
+    const next = nextGroup(order.steps, position);
+    if (next.length === 0) {
+      this.db.connection
+        .prepare("UPDATE orders SET status = 'completed', completed_on = ? WHERE id = ?")
+        .run(today, order.id);
+      return;
+    }
+    const start = this.db.connection.prepare(
+      "UPDATE order_steps SET status = 'active', started_on = ? WHERE order_id = ? AND position = ?",
+    );
+    for (const p of next) start.run(today, order.id, p);
   }
 
   /** „Sprawdzone dziś” w kroku codziennym: zapis kontroli, krok zostaje otwarty. */
@@ -296,7 +321,10 @@ export class OrderService {
   undoLastStep(orderId: number, person: string): void {
     const who = requirePerson(person);
     const order = this.require(orderId);
-    const lastDone = [...order.steps].reverse().find((s) => s.status === 'done');
+    const lastDone = [...order.steps]
+      .filter((s) => s.status === 'done')
+      .sort((a, b) => (b.doneOn ?? '').localeCompare(a.doneOn ?? '') || b.position - a.position)
+      .find((s) => canRevertStep(order, s));
     if (!lastDone) throw new Error('Nie ma czego cofnąć: żaden krok nie jest odhaczony');
     this.inTransaction(() => this.revertStepDone(orderId, lastDone, who));
   }
@@ -409,16 +437,16 @@ export class OrderService {
   }
 
   /**
-   * Odhaczony krok wraca do „aktywny”, następny do „czeka”. Kontrole i rozmowy na następnym kroku
-   * przestają obowiązywać, więc zaznaczamy je jako cofnięte (tak samo wpis „zrobione”).
+   * Odhaczony krok wraca do „aktywny”. Jeśli po nim wystartowała już następna grupa kroków, wraca ona
+   * do „czeka”; kontrole i rozmowy na niej przestają obowiązywać, więc zaznaczamy je jako cofnięte
+   * (tak samo wpis „zrobione”). Inne odhaczone kroki równoległe zostają zrobione.
    */
   private revertStepDone(orderId: number, step: OrderStep, who: string): void {
     const conn = this.db.connection;
-    conn
-      .prepare(
-        "UPDATE order_steps SET status = 'pending', started_on = NULL, last_checked_on = NULL, last_checked_by = NULL WHERE order_id = ? AND position = ?",
-      )
-      .run(orderId, step.position + 1);
+    const order = this.require(orderId);
+    const next = nextGroup(order.steps, step.position);
+    const nextStarted = next.some((p) => order.steps.find((s) => s.position === p)?.status === 'active');
+    if (nextStarted) this.stopGroup(orderId, next);
     conn
       .prepare(
         "UPDATE order_steps SET status = 'active', done_on = NULL, done_by = NULL WHERE order_id = ? AND position = ?",
@@ -427,11 +455,25 @@ export class OrderService {
     conn.prepare("UPDATE orders SET status = 'active', completed_on = NULL WHERE id = ?").run(orderId);
     conn
       .prepare(
-        `UPDATE order_history SET reverted = 1 WHERE order_id = ? AND reverted = 0 AND (
-           (action = 'step_done' AND step_position = ?) OR (action IN ('checked', 'payment_call') AND step_position = ?))`,
+        "UPDATE order_history SET reverted = 1 WHERE order_id = ? AND reverted = 0 AND action = 'step_done' AND step_position = ?",
       )
-      .run(orderId, step.position, step.position + 1);
+      .run(orderId, step.position);
     this.log(orderId, who, 'undone', step, UNDO_LABEL.step_done);
+  }
+
+  /** Kroki grupy wracają do „czeka”; ich kontrole i rozmowy o zapłacie przestają obowiązywać. */
+  private stopGroup(orderId: number, positions: number[]): void {
+    const conn = this.db.connection;
+    const stop = conn.prepare(
+      "UPDATE order_steps SET status = 'pending', started_on = NULL, last_checked_on = NULL, last_checked_by = NULL WHERE order_id = ? AND position = ?",
+    );
+    const revertChecks = conn.prepare(
+      "UPDATE order_history SET reverted = 1 WHERE order_id = ? AND reverted = 0 AND action IN ('checked', 'payment_call') AND step_position = ?",
+    );
+    for (const p of positions) {
+      stop.run(orderId, p);
+      revertChecks.run(orderId, p);
+    }
   }
 
   /** Czy w zleceniu nie odhaczono jeszcze żadnego kroku (wtedy wolno je usunąć przy cofnięciu przyjęcia oferty). */
@@ -542,6 +584,7 @@ export class OrderService {
       lastCheckedOn: r.last_checked_on,
       lastCheckedBy: r.last_checked_by,
       assignee: r.assignee,
+      parallel: r.parallel === 1,
     }));
   }
 }
@@ -577,6 +620,7 @@ interface StepRow {
   last_checked_on: string | null;
   last_checked_by: string | null;
   assignee: string | null;
+  parallel: number;
 }
 
 interface HistoryRow {
@@ -601,13 +645,19 @@ function canRevert(order: Order, entry: HistoryRow): boolean {
   if (entry.action === 'lead_changed') return entry.undo_data !== null;
   const step = order.steps.find((s) => s.position === entry.step_position);
   if (!step) return false;
-  if (entry.action === 'step_done') {
-    return (
-      step.status === 'done' && !order.steps.some((s) => s.position > step.position && s.status === 'done')
-    );
-  }
+  if (entry.action === 'step_done') return canRevertStep(order, step);
   if (entry.action === 'step_assigned') return step.status !== 'done' && entry.undo_data !== null;
   return step.status === 'active' && entry.undo_data !== null;
+}
+
+/**
+ * Zrobiony krok można cofnąć, gdy żaden krok z dalszych grup nie jest zrobiony
+ * (kroki równoległe z tej samej grupy mogą być zrobione: cofamy je niezależnie).
+ */
+function canRevertStep(order: Order, step: OrderStep): boolean {
+  if (step.status !== 'done') return false;
+  const groupEnd = Math.max(...groupOf(order.steps, step.position));
+  return !order.steps.some((s) => s.position > groupEnd && s.status === 'done');
 }
 
 /** Opis cofnięcia w historii; przy limicie i osobach z tym, co było zmienione (np. „Anna → Piotr”). */

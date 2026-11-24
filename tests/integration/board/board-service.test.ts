@@ -55,9 +55,9 @@ describe('BoardService: rows for the "Na dziś" board', () => {
   it('each row knows who the current step belongs to (assigned person or lead person)', () => {
     const id = orders.create(order('Jan', { leadPerson: 'Anna' }), 'Anna');
     orders.create(order('Ewa'), 'Anna');
-    expect(board.rows().map((r) => r.owner)).toEqual(['Anna', null]);
+    expect(board.rows().map((r) => r.owners)).toEqual([['Anna'], []]);
     orders.assignPeople(id, { leadPerson: 'Anna', steps: { 1: 'Piotr' } }, 'Anna');
-    expect(board.rows()[0]?.owner).toBe('Piotr');
+    expect(board.rows()[0]?.owners).toEqual(['Piotr']);
   });
 
   it('shows one row per active order with its current step and details', () => {
@@ -141,5 +141,65 @@ describe('BoardService: rows for the "Na dziś" board', () => {
     today = '2026-11-19';
     orders.setMeasurementDate(id, '2026-11-24', 'Anna');
     expect(board.rows()[0]).toMatchObject({ measurementMissing: false, urgency: { colour: 'green' } });
+  });
+
+  describe('kroki równoległe', () => {
+    let parallelTypeId: number;
+    beforeEach(() => {
+      parallelTypeId = new WorkTypeRepository(db).create({
+        name: 'Podział równoległy',
+        steps: [
+          { name: 'Ustalenie terminu pomiaru', kind: 'own', limitDays: 2, provisional: false },
+          { name: 'Analiza materiałów', kind: 'own', limitDays: 2, provisional: false, parallel: true },
+          { name: 'Wysłanie zawiadomień', kind: 'own', limitDays: 2, provisional: false },
+        ],
+      });
+    });
+    const parallelOrder = (name: string) =>
+      orders.create(order(name, { workTypeId: parallelTypeId, leadPerson: 'Łukasz' }), 'Łukasz');
+
+    it('one row shows both running steps and both people', () => {
+      const id = parallelOrder('Jan');
+      orders.assignPeople(id, { leadPerson: 'Łukasz', steps: { 2: 'Bartek' } }, 'Łukasz');
+      expect(board.rows()[0]).toMatchObject({
+        currentStepName: 'Ustalenie terminu pomiaru + Analiza materiałów',
+        owners: ['Łukasz', 'Bartek'],
+      });
+    });
+
+    it('stays red and on top while one parallel step is overdue, even if the other one is ticked', () => {
+      const id = parallelOrder('Jan');
+      orders.completeStep(id, 1, 'Łukasz');
+      today = '2026-11-18'; // dzień 2 = limit kroku „Analiza”
+      orders.create(order('Ewa'), 'Anna');
+      const [first] = board.rows();
+      expect(first).toMatchObject({ clientName: 'Jan', currentStepName: 'Analiza materiałów' });
+      expect(first?.urgency.colour).toBe('red');
+    });
+
+    it('drops to green (bottom of the list) only when all parallel steps are ticked', () => {
+      const id = parallelOrder('Jan');
+      today = '2026-11-18';
+      orders.completeStep(id, 2, 'Bartek');
+      expect(board.rows()[0]?.urgency.colour).toBe('red');
+      orders.completeStep(id, 1, 'Łukasz');
+      expect(board.rows()[0]).toMatchObject({
+        currentStepName: 'Wysłanie zawiadomień',
+        urgency: { colour: 'green' },
+      });
+    });
+
+    it('gives each running step its own colour (for the order card)', () => {
+      const id = parallelOrder('Jan');
+      orders.changeStepLimit(id, 2, '5', 'Bartek');
+      today = '2026-11-18';
+      const o = orders.get(id);
+      if (!o) throw new Error('brak zlecenia');
+      const colours = board.stepUrgencies(o, today);
+      expect(colours.get(1)?.colour).toBe('red');
+      expect(colours.get(2)?.colour).toBe('green');
+      expect(colours.has(3)).toBe(false);
+      expect(board.orderUrgency(o, today)?.colour).toBe('red');
+    });
   });
 });

@@ -32,9 +32,11 @@ for (const width of [390, 735, 1366]) {
     await addOrder(page, `Klient układ ${width} ${Date.now()}`);
 
     const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
-    await panel.getByText('Zmień limit tego kroku').click();
+    // „Podział”: kroki 1 i 2 trwają równolegle, każdy ma własną zmianę limitu; sprawdzamy pierwszą.
+    const limitChange = panel.locator('.limit-change').first();
+    await limitChange.getByText('Zmień limit tego kroku').click();
 
-    const label = panel.locator('.limit-change label.setting');
+    const label = limitChange.locator('label.setting');
     const title = label.getByText('Nowy limit', { exact: true });
     const hint = label.getByText('dni roboczych od rozpoczęcia kroku, tylko w tym zleceniu');
     const minus = label.getByRole('button', { name: 'Zmniejsz: Nowy limit' });

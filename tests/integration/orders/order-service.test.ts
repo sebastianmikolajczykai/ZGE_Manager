@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { AppDatabase } from '../../../src/db.js';
 import { WorkTypeRepository } from '../../../src/modules/work-types/work-type-repository.js';
-import { currentOwner, OrderService } from '../../../src/modules/orders/order-service.js';
+import { currentOwners, OrderService } from '../../../src/modules/orders/order-service.js';
 import type { OrderInput } from '../../../src/modules/orders/order-input.js';
 
 const PERSON = 'Osoba A';
@@ -231,7 +231,7 @@ describe('OrderService', () => {
     const ownerOf = (id: number) => {
       const order = service.get(id);
       if (!order) throw new Error(`brak zlecenia ${id}`);
-      return currentOwner(order);
+      return currentOwners(order)[0] ?? null;
     };
 
     it('a new order can have a lead person (optional, none by default)', () => {

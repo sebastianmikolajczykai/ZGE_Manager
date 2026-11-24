@@ -199,7 +199,7 @@ export function boardPage(
 
 /** Filtry Tablicy: najpierw osoba („Moje”, liczą się z tego kafelki), potem kolor. */
 function filterRows(rows: BoardRow[], filter: BoardFilter, person: string | null) {
-  const mine = person ? rows.filter((r) => r.owner === person) : rows;
+  const mine = person ? rows.filter((r) => r.owners.includes(person)) : rows;
   const shown = mine.filter((r) => matchesFilter(r, filter));
   return { mine, shown };
 }
@@ -291,7 +291,7 @@ function boardTable(
             <td>${r.town}${r.plot ? html`<small>dz. ${r.plot}</small>` : ''}</td>
             <td class="step-cell">
               ${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}
-              ${r.owner ? assigneeTag(r.owner) : ''} ${r.measurementMissing ? NO_DATE_LABEL : ''}
+              ${r.owners.map((name) => assigneeTag(name))} ${r.measurementMissing ? NO_DATE_LABEL : ''}
             </td>
             <td class="num">
               <b>${r.daysOnStep}</b
@@ -320,6 +320,8 @@ export function orderDetail(
   undoableIds: number[] = [],
   /** Ramka z wiadomością SMS (tylko gdy zlecenie czeka na zapłatę). */
   messageBox: SafeHtml | null = null,
+  /** Kolor każdego bieżącego kroku (kroki równoległe mają własne limity i kolory). */
+  stepColours?: ReadonlyMap<number, Urgency>,
 ): SafeHtml {
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
@@ -357,7 +359,7 @@ export function orderDetail(
     </dl>
     ${messageBox ?? ''}
     <h3>Kroki</h3>
-    ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
+    ${stepsSection(order, people, urgency, stepColours)} ${assignForm(order, people)}
     ${historySection(history, orderUndo(order.id, undoableIds, people))}
   </section>`;
 }
@@ -424,13 +426,19 @@ function calendarButton(order: Order, workTypeName: string): SafeHtml {
 }
 
 /** Zrobione kroki i kroki do zrobienia zwinięte pod strzałkami, bieżący krok zawsze widoczny (numery jak w rodzaju pracy). */
-function stepsSection(order: Order, people: Person[], urgency: Urgency | null): SafeHtml {
+function stepsSection(
+  order: Order,
+  people: Person[],
+  urgency: Urgency | null,
+  stepColours: ReadonlyMap<number, Urgency> = new Map(),
+): SafeHtml {
   const done = order.steps.filter((s) => s.status === 'done');
   const current = order.steps.filter((s) => s.status === 'active');
   const todo = order.steps.filter((s) => s.status === 'pending');
+  const together = current.length > 1;
   const list = (steps: OrderStep[]) =>
     html`<ol class="steps">
-      ${steps.map((s) => stepItem(order, s, people, urgency))}
+      ${steps.map((s) => stepItem(order, s, people, stepColours.get(s.position) ?? urgency, together))}
     </ol>`;
   return html`${done.length > 0 ? fold('steps-done', `Zrobione kroki (${done.length})`, list(done)) : ''}
   ${current.length > 0 ? list(current) : ''}
@@ -460,14 +468,30 @@ export function historySection(history: HistoryEntry[], undo: HistoryUndo): Safe
   return fold('history', `Historia (${history.length})`, historyList(history, historyText, undo));
 }
 
-function stepItem(order: Order, step: OrderStep, people: Person[], urgency: Urgency | null): SafeHtml {
+/** `together` = teraz trwa kilka kroków równoległych: każdy pokazuje własny kolor. */
+function stepItem(
+  order: Order,
+  step: OrderStep,
+  people: Person[],
+  urgency: Urgency | null,
+  together = false,
+): SafeHtml {
   const active = step.status === 'active';
   return html`<li value="${step.position}" class="step ${step.status}">
-    ${active ? html`<span class="now-label">CO TERAZ · krok ${step.position} z ${order.steps.length}</span>` : ''}
+    ${active ? nowLabel(order, step, together ? urgency : null) : ''}
     <span class="dot" aria-hidden="true">${step.status === 'done' ? '✓' : step.position}</span
     ><span class="name">${step.name}</span>${step.assignee ? assigneeTag(step.assignee) : ''}
     ${stepMeta(step, active ? urgency : null)}${active ? stepActions(order, step, people) : ''}
   </li>`;
+}
+
+/** „CO TERAZ · krok N z M”; przy krokach równoległych dopisek „równolegle” i własny kolor kroku. */
+function nowLabel(order: Order, step: OrderStep, parallelUrgency: Urgency | null): SafeHtml {
+  const label = html`<span class="now-label"
+    >CO TERAZ · krok ${step.position} z ${order.steps.length}${parallelUrgency ? ' · równolegle' : ''}</span
+  >`;
+  if (!parallelUrgency) return label;
+  return html`${label} ${statusChip(parallelUrgency.colour, COLOUR_LABEL[parallelUrgency.colour])}`;
 }
 
 /** Pod nazwą kroku: kto i kiedy zrobił albo limit (przy bieżącym kroku także ile dni po terminie). */

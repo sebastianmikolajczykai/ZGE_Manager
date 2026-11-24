@@ -32,12 +32,13 @@ test('filtr „Moje”: osoba prowadząca, przypisanie kroku i zapamiętanie oso
   await page.getByRole('link', { name: '👤 Moje (Bartek)' }).click();
   await expect(page).toHaveURL(/\?osoba=Bartek$/);
 
-  // Na karcie: pierwszy krok robi Bartek, więc zlecenie przechodzi do jego „Moje”.
+  // Na karcie: oba bieżące kroki (1 i 2 trwają równolegle) robi Bartek, więc zlecenie przechodzi do jego „Moje”.
   await page.goto('/');
   await row.getByRole('link', { name: client }).click();
   const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   await panel.getByText('Osoby w zleceniu').click();
   await panel.getByLabel('Osoba do kroku 1', { exact: true }).selectOption('Bartek');
+  await panel.getByLabel('Osoba do kroku 2', { exact: true }).selectOption('Bartek');
   await clickAndConfirm(page, panel.getByRole('button', { name: 'Zapisz osoby: Łukasz' }));
   await panel.getByText(/^Historia \(\d+\)$/).click();
   await expect(

@@ -36,8 +36,24 @@ describe('WorkTypeRepository', () => {
       name: 'Mapa',
       hidden: false,
       steps: [
-        { position: 1, name: 'Pierwszy', kind: 'own', limitDays: 2, provisional: false, payment: false },
-        { position: 2, name: 'Drugi', kind: 'waiting', limitDays: null, provisional: true, payment: false },
+        {
+          position: 1,
+          name: 'Pierwszy',
+          kind: 'own',
+          limitDays: 2,
+          provisional: false,
+          payment: false,
+          parallel: false,
+        },
+        {
+          position: 2,
+          name: 'Drugi',
+          kind: 'waiting',
+          limitDays: null,
+          provisional: true,
+          payment: false,
+          parallel: false,
+        },
       ],
     });
   });
@@ -51,6 +67,18 @@ describe('WorkTypeRepository', () => {
       ],
     });
     expect(repo.findById(id)?.steps.map((st) => st.payment)).toEqual([false, true]);
+  });
+
+  it('stores the parallel mark and keeps it in a copy', () => {
+    const id = repo.create({
+      name: 'Równoległy',
+      steps: [
+        { name: 'Termin', kind: 'own', limitDays: 2, provisional: false },
+        { name: 'Analiza', kind: 'own', limitDays: 2, provisional: false, parallel: true },
+      ],
+    });
+    expect(repo.findById(id)?.steps.map((s) => s.parallel)).toEqual([false, true]);
+    expect(repo.findById(repo.copy(id))?.steps.map((s) => s.parallel)).toEqual([false, true]);
   });
 
   it('returns null for an unknown id', () => {

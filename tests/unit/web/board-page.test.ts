@@ -17,7 +17,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     lastPerson: 'Bartek',
     pricePln: 2500,
     measurementMissing: false,
-    owner: null,
+    owners: [],
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
   };
@@ -141,10 +141,10 @@ describe('Tablica: filtr „Moje” (bez logowania)', () => {
     { id: 2, name: 'Bartek' },
   ];
   const OWNED = [
-    row(1, 'red', { owner: 'Bartek' }),
-    row(2, 'yellow', { owner: 'Łukasz' }),
-    row(3, 'green', { owner: 'Bartek' }),
-    row(4, 'green', { owner: null }),
+    row(1, 'red', { owners: ['Bartek'] }),
+    row(2, 'yellow', { owners: ['Łukasz'] }),
+    row(3, 'green', { owners: ['Bartek'] }),
+    row(4, 'green', { owners: [] }),
   ];
   const mine = boardPage(OWNED, null, null, null, {
     counts: COUNTS,
