@@ -491,7 +491,9 @@ function nowLabel(order: Order, step: OrderStep, parallelUrgency: Urgency | null
     >CO TERAZ · krok ${step.position} z ${order.steps.length}${parallelUrgency ? ' · równolegle' : ''}</span
   >`;
   if (!parallelUrgency) return label;
-  return html`${label} ${statusChip(parallelUrgency.colour, COLOUR_LABEL[parallelUrgency.colour])}`;
+  return html`<span class="now-row"
+    >${label} ${statusChip(parallelUrgency.colour, COLOUR_LABEL[parallelUrgency.colour])}</span
+  >`;
 }
 
 /** Pod nazwą kroku: kto i kiedy zrobił albo limit (przy bieżącym kroku także ile dni po terminie). */
@@ -872,7 +874,7 @@ dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; } dt { color:va
 /* Kroki jako oś z numerkami; bieżący krok to wyróżniony blok „CO TERAZ”. */
 .steps { list-style:none; padding:0; margin:0; }
 .step { display:grid; grid-template-columns:28px 1fr; column-gap:10px; padding:4px 0; }
-.step > small, .step > .actions, .step > .now-label { grid-column:2; } .step .dot { grid-row:span 2; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; background:var(--line); }
+.step > small, .step > .actions, .step > .now-label, .step > .now-row { grid-column:2; } .now-row { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; } .step .dot { grid-row:span 2; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; background:var(--line); }
 .step.done { color:var(--muted); } .step.done .dot { background:var(--green); color:var(--green-ink); }
 .step.active { background:#f0fdf4; border-left:6px solid var(--brand); border-radius:12px; padding:12px 12px 10px 8px; margin:6px 0; }
 .card-red .step.active { background:#fef2f2; border-color:var(--red-bar); } .card-red .now-label { color:var(--red-ink); }
