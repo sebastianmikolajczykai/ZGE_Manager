@@ -2,7 +2,7 @@ import type { AppDatabase } from '../../db.js';
 import type { LocalDate } from '../urgency/day-counter.js';
 import type { StepKind } from '../work-types/work-type-definition.js';
 import { WorkTypeRepository } from '../work-types/work-type-repository.js';
-import { parseMeasurementDate, parseOrderInput, type OrderInput } from './order-input.js';
+import { parseMeasurementDate, parseOrderInput, parseOrderNumber, type OrderInput } from './order-input.js';
 import { optional, requirePerson } from '../common/form-fields.js';
 
 export type StepStatus = 'pending' | 'active' | 'done';
@@ -15,7 +15,8 @@ export type HistoryAction =
   | 'limit_changed'
   | 'lead_changed'
   | 'step_assigned'
-  | 'measurement_set';
+  | 'measurement_set'
+  | 'number_set';
 
 export interface OrderStep {
   position: number;
@@ -42,6 +43,7 @@ export interface Order extends Omit<OrderInput, 'workTypeId'> {
   status: 'active' | 'completed';
   completedOn: LocalDate | null;
   leadPerson: string | null;
+  orderNumber: string | null;
   steps: OrderStep[];
 }
 
@@ -82,6 +84,7 @@ const UNDO_LABEL: Record<UndoableAction, string> = {
   lead_changed: 'osoba prowadząca',
   step_assigned: 'osoba do kroku',
   measurement_set: 'data pomiaru',
+  number_set: 'numer zlecenia',
 };
 
 /** Poprzednia osoba (prowadząca albo kroku), żeby dało się ją przywrócić. */
@@ -102,7 +105,10 @@ interface LimitUndoData {
 interface MeasurementUndoData {
   measurementOn: LocalDate | null;
 }
-type UndoData = CheckUndoData | LimitUndoData | MeasurementUndoData | PersonUndoData;
+interface NumberUndoData {
+  orderNumber: string | null;
+}
+type UndoData = CheckUndoData | LimitUndoData | MeasurementUndoData | PersonUndoData | NumberUndoData;
 
 const GROSZE_PER_PLN = 100;
 
@@ -136,8 +142,8 @@ export class OrderService {
       const id = Number(
         this.db.connection
           .prepare(
-            `INSERT INTO orders (client_name, phone, town, work_type_id, plot, office, price_grosze, note, measurement_on, received_on, lead_person)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO orders (client_name, phone, town, work_type_id, plot, office, price_grosze, note, measurement_on, received_on, lead_person, order_number)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.clientName,
@@ -151,6 +157,7 @@ export class OrderService {
             input.measurementOn,
             today,
             input.leadPerson ?? null,
+            input.orderNumber ?? null,
           ).lastInsertRowid,
       );
       const insertStep = this.db.connection.prepare(
@@ -245,6 +252,19 @@ export class OrderService {
       const before: MeasurementUndoData = { measurementOn: order.measurementOn };
       const note = `${dateOrNone(order.measurementOn)} → ${dateOrNone(date)}`;
       this.log(orderId, who, 'measurement_set', null, note, before);
+    });
+  }
+
+  /** Wpisuje, zmienia albo czyści (pusty tekst) numer zlecenia; zmiana trafia do historii i da się ją cofnąć. */
+  setOrderNumber(orderId: number, numberText: string, person: string): void {
+    const who = requirePerson(person);
+    const order = this.require(orderId);
+    const number = parseOrderNumber(numberText);
+    if (number === order.orderNumber) throw new Error('To ten sam numer zlecenia, nic się nie zmienia');
+    this.inTransaction(() => {
+      this.db.connection.prepare('UPDATE orders SET order_number = ? WHERE id = ?').run(number, orderId);
+      const before: NumberUndoData = { orderNumber: order.orderNumber };
+      this.log(orderId, who, 'number_set', null, change(order.orderNumber, number), before);
     });
   }
 
@@ -372,13 +392,20 @@ export class OrderService {
     this.log(orderId, who, 'undone', step, undoNote(entry));
   }
 
-  /** Przywraca stan zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit / osoba / data pomiaru). */
+  /** Przywraca stan zapisany przy wpisie (kontrola / rozmowa o zapłacie / limit / osoba / data pomiaru / numer). */
   private restore(orderId: number, entry: HistoryRow): void {
     const data = JSON.parse(entry.undo_data ?? '{}') as CheckUndoData &
       LimitUndoData &
       PersonUndoData &
-      MeasurementUndoData;
+      MeasurementUndoData &
+      NumberUndoData;
     const position = entry.step_position;
+    if (entry.action === 'number_set') {
+      this.db.connection
+        .prepare('UPDATE orders SET order_number = ? WHERE id = ?')
+        .run(data.orderNumber ?? null, orderId);
+      return;
+    }
     if (entry.action === 'measurement_set') {
       this.db.connection
         .prepare('UPDATE orders SET measurement_on = ? WHERE id = ?')
@@ -561,6 +588,7 @@ interface OrderRow {
   status: 'active' | 'completed';
   completed_on: string | null;
   lead_person: string | null;
+  order_number: string | null;
 }
 
 interface StepRow {
@@ -595,10 +623,13 @@ function isUndoable(action: HistoryAction): action is UndoableAction {
   return action !== 'created' && action !== 'undone';
 }
 
+/** Wpisy zmieniające pole całego zlecenia (nie kroku): da się je cofnąć, gdy zapisano poprzednią wartość. */
+const ORDER_FIELD_ACTIONS: readonly HistoryAction[] = ['lead_changed', 'number_set'];
+
 /** Czy wpis wciąż działa i da się go bezpiecznie cofnąć (stare wpisy bez zapisanego stanu: tylko „zrobione”). */
 function canRevert(order: Order, entry: HistoryRow): boolean {
   if (entry.action === 'measurement_set') return order.status === 'active' && entry.undo_data !== null;
-  if (entry.action === 'lead_changed') return entry.undo_data !== null;
+  if (ORDER_FIELD_ACTIONS.includes(entry.action)) return entry.undo_data !== null;
   const step = order.steps.find((s) => s.position === entry.step_position);
   if (!step) return false;
   if (entry.action === 'step_done') {
@@ -614,7 +645,9 @@ function canRevert(order: Order, entry: HistoryRow): boolean {
 function undoNote(entry: HistoryRow): string {
   const label = UNDO_LABEL[entry.action as UndoableAction];
   if (entry.action === 'limit_changed' || entry.action === 'measurement_set') return `${label} ${entry.note}`;
-  if (entry.action === 'lead_changed' || entry.action === 'step_assigned') return `${label}: ${entry.note}`;
+  if (entry.action === 'lead_changed' || entry.action === 'step_assigned' || entry.action === 'number_set') {
+    return `${label}: ${entry.note}`;
+  }
   return label;
 }
 
@@ -638,6 +671,7 @@ function toOrder(r: OrderRow, steps: OrderStep[]): Order {
     status: r.status,
     completedOn: r.completed_on,
     leadPerson: r.lead_person,
+    orderNumber: r.order_number,
     steps,
   };
 }

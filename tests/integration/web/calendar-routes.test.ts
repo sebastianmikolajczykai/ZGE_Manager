@@ -179,7 +179,7 @@ describe('Ustawienia → Kalendarz Google (ekran)', () => {
     expect(body).toContain('Piotr: odłączono konto Google');
   });
 
-  it('unpaid order: reminder „zapłata, zlecenie nr N”; marked paid → removed', async () => {
+  it('unpaid order: reminder with the office order number; marked paid → removed', async () => {
     account.connected = true;
     const workTypeId = new WorkTypeRepository(db).create({
       name: 'Test zapłaty',
@@ -193,13 +193,14 @@ describe('Ustawienia → Kalendarz Google (ekran)', () => {
       phone: '600 100 200',
       town: 'Przykładowo',
       workTypeId: String(workTypeId),
+      orderNumber: '125 podział',
       person: 'Anna',
     });
     const orderId = Number(String(created.headers.location).split('zlecenie=')[1]);
     await post(`/zlecenia/${orderId}/kroki/1/zrobione`, { person: 'Anna' });
     await post('/kalendarz-google/wlacz', { person: 'Anna', on: '1' });
     await post('/kalendarz-google/synchronizuj');
-    expect(api.titles()).toEqual([`Zadzwoń: zapłata, zlecenie nr ${orderId} @ 2026-11-19`]);
+    expect(api.titles()).toEqual(['Zadzwoń: zapłata, zlecenie 125 podział @ 2026-11-19']);
 
     await post(`/niezaplacone/${orderId}/zaplacone`, { person: 'Anna' });
     await post('/kalendarz-google/synchronizuj');

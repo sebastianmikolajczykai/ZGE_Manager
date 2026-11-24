@@ -60,6 +60,12 @@ describe('BoardService: rows for the "Na dziś" board', () => {
     expect(board.rows()[0]?.owner).toBe('Piotr');
   });
 
+  it('carries the office order number for the board (null for orders without one)', () => {
+    orders.create(order('Jan', { orderNumber: '125 podział' }), 'Anna');
+    orders.create(order('Ewa'), 'Anna');
+    expect(board.rows().map((r) => r.orderNumber)).toEqual(['125 podział', null]);
+  });
+
   it('shows one row per active order with its current step and details', () => {
     orders.create(order('Jan'), 'Anna');
     const [row] = board.rows();

@@ -122,6 +122,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   orderAction('/zlecenia/:id/pomiar', (o, _p, who, f) =>
     s.orders.setMeasurementDate(o, f.measurementOn ?? '', who),
   );
+  orderAction('/zlecenia/:id/numer', (o, _p, who, f) => s.orders.setOrderNumber(o, f.orderNumber ?? '', who));
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
   orderAction('/zlecenia/:id/osoby', (o, _p, who, f) => s.orders.assignPeople(o, toAssignment(f), who));
   registerHistoryUndo(app, s);
@@ -376,6 +377,7 @@ function toOrderInput(f: Form): OrderInput {
     note: opt('note'),
     measurementOn: opt('measurementOn'),
     leadPerson: opt('leadPerson'),
+    orderNumber: opt('orderNumber'),
   };
 }
 

@@ -36,14 +36,13 @@ export class DayCounter {
     return count;
   }
 
-  /** Dzień, w którym od `from` minie `days` dni (np. termin telefonu po 7 dniach roboczych). */
-  addDays(from: LocalDate, days: number): LocalDate {
-    if (!Number.isInteger(days) || days < 0) throw new Error(`Liczba dni nie może być ujemna (jest ${days})`);
+  /** Dzień, w którym od `from` minie `days` dni (odwrotność daysBetween); 0 = ten sam dzień. */
+  dateAfter(from: LocalDate, days: number): LocalDate {
+    if (!Number.isInteger(days) || days < 0) throw new Error(`Liczba dni musi być nieujemna (jest ${days})`);
     let day = toEpochDay(from);
-    if (this.mode === 'calendar') return toIsoDate(day + days);
-    for (let left = days; left > 0;) {
+    for (let counted = 0; counted < days;) {
       day++;
-      if (this.isWorkingEpochDay(day)) left--;
+      if (this.mode === 'calendar' || this.isWorkingEpochDay(day)) counted++;
     }
     return toIsoDate(day);
   }

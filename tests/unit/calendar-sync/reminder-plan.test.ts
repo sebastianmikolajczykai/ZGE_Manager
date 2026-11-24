@@ -29,6 +29,13 @@ describe('planReminders: kiedy i jakie wydarzenie „Zadzwoń”', () => {
     });
   });
 
+  it('order with an office number: the title uses it (never the client name)', () => {
+    const src = offer({ kind: 'payment', id: 34, limitDays: 14, number: '125 podział' });
+    const [r] = planReminders([src], rules, '2026-11-16', APP);
+    expect(r?.title).toBe('Zadzwoń: zapłata, zlecenie 125 podział');
+    expect(r?.key).toBe('zaplata-34');
+  });
+
   it('a new call (later last contact) moves the date: counted again from the call', () => {
     const [r] = planReminders([offer({ lastContactOn: '2026-11-25' })], rules, '2026-11-25', APP);
     expect(r?.date).toBe('2026-12-04');

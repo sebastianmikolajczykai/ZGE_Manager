@@ -22,7 +22,7 @@ import { CalendarSyncService } from './modules/calendar-sync/calendar-sync-servi
 import { CalendarSyncScheduler } from './modules/calendar-sync/calendar-sync-scheduler.js';
 import type { ReminderSource } from './modules/calendar-sync/reminder-plan.js';
 import type { CalendarAccount } from './web/calendar-routes.js';
-import { calendarBanner } from './web/calendar-views.js';
+import { calendarBanner } from './web/calendar-sync-views.js';
 
 /** Osoby wpisywane przy pierwszym uruchomieniu (potem edycja w Ustawieniach). */
 export const DEFAULT_PEOPLE: readonly string[] = ['Łukasz', 'Bartek', 'Marcelina'];
@@ -132,6 +132,7 @@ function reminderSources(
     ...payments.rows().map((p) => ({
       kind: 'payment' as const,
       id: p.orderId,
+      number: p.orderNumber,
       lastContactOn: p.lastContactOn,
       limitDays: p.limitDays,
     })),

@@ -21,7 +21,7 @@ import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin.js';
 import { workTypesSection } from './work-type-views.js';
 import { messageSettingsSection, type MessageSettingsView } from './message-views.js';
-import { calendarSection } from './calendar-views.js';
+import { calendarSection } from './calendar-sync-views.js';
 import type { SyncStatus } from '../modules/calendar-sync/calendar-sync-service.js';
 
 /** Potwierdzenie po zapisie: ile pól się zmieniło i kto zapisał. */

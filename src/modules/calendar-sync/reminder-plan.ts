@@ -12,6 +12,8 @@ export interface ReminderSource {
   lastContactOn: LocalDate;
   /** Po ilu dniach zadzwonić; null = bez limitu (bez przypomnienia). */
   limitDays: number | null;
+  /** Numer zlecenia nadany w biurze (np. „125 podział”); brak = numer z aplikacji. Nigdy nazwisko klienta. */
+  number?: string | null;
 }
 
 /** Wydarzenie, które powinno być w kalendarzu „ZGE przypomnienia”. */
@@ -30,9 +32,10 @@ export interface DueDates {
   workingDayOnOrAfter(date: LocalDate): LocalDate;
 }
 
-/** Tekst numeru sprawy w wydarzeniu. Jedno miejsce do zmiany, gdy zlecenia dostaną własne numery. */
-export function reminderLabel(source: Pick<ReminderSource, 'kind' | 'id'>): string {
-  return source.kind === 'offer' ? `oferta nr ${source.id}` : `zapłata, zlecenie nr ${source.id}`;
+/** Tekst numeru sprawy w wydarzeniu: numer z biura, a gdy go nie ma, numer z aplikacji. */
+export function reminderLabel(source: Pick<ReminderSource, 'kind' | 'id' | 'number'>): string {
+  if (source.kind === 'offer') return `oferta nr ${source.id}`;
+  return source.number ? `zapłata, zlecenie ${source.number}` : `zapłata, zlecenie nr ${source.id}`;
 }
 
 /**

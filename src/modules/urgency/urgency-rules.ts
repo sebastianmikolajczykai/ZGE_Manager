@@ -81,12 +81,23 @@ export class UrgencyRules {
 
   /** Termin po `days` dniach (robocze, bez świąt i dni wolnych firmy) – do przypomnień w kalendarzu. */
   addDays(from: LocalDate, days: number): LocalDate {
-    return this.snapshot().counter.addDays(from, days);
+    return this.snapshot().counter.dateAfter(from, days);
   }
 
   /** Dziś, jeśli to dzień roboczy, inaczej najbliższy dzień roboczy. */
   workingDayOnOrAfter(date: LocalDate): LocalDate {
     return this.snapshot().counter.workingDayOnOrAfter(date);
+  }
+
+  /**
+   * Kiedy zadzwonić: dzień, w którym od ostatniego kontaktu minie limit (sprawa robi się wtedy czerwona).
+   * Nigdy wcześniej niż dziś; bez limitu = dziś. Do przypomnień w Kalendarzu Google.
+   */
+  dueOn(lastContactOn: LocalDate, limitDays: number | null, today: LocalDate): LocalDate {
+    if (limitDays === null) return today;
+    const due = this.snapshot().counter.dateAfter(lastContactOn, limitDays);
+    // Daty RRRR-MM-DD porównują się poprawnie jako tekst.
+    return due > today ? due : today;
   }
 
   evaluate(step: StepState, today: LocalDate): Urgency {
