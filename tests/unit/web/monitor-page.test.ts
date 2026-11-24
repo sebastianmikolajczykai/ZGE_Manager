@@ -17,7 +17,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     daysOnStep: 4,
     lastPerson: 'Bartek',
     pricePln: 2500,
-    owner: null,
+    owners: [],
     measurementMissing: false,
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
@@ -112,7 +112,7 @@ describe('Widok na monitor (styl D)', () => {
   });
 
   it('shows whose turn it is when someone owns the current step, otherwise who did something last', () => {
-    const owned = tile(monitorPage([row(7, 'green', { owner: 'Marcelina' })], COUNTS, 60), 'Klient 7');
+    const owned = tile(monitorPage([row(7, 'green', { owners: ['Marcelina'] })], COUNTS, 60), 'Klient 7');
     expect(owned).toContain('Marcelina');
     expect(owned).not.toContain('Bartek');
     expect(tile(page, 'Klient 1 (przykład)')).toMatch(/ostatnio[\s\S]*Bartek/);

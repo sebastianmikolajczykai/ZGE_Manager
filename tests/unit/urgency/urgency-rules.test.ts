@@ -18,7 +18,7 @@ function ownStep(overrides: Partial<StepState> = {}): StepState {
   };
 }
 
-describe('UrgencyRules: own step, idle thresholds (2 yellow / 3 red)', () => {
+describe('UrgencyRules: own step without a limit, idle thresholds (2 yellow / 3 red)', () => {
   it.each([
     ['2026-11-01', 'green'],
     ['2026-11-02', 'green'],
@@ -61,8 +61,15 @@ describe('UrgencyRules: step limit (tick day = day 0, yellow on day N-1, red on 
     expect(rules.evaluate(step, '2026-11-06').colour).toBe('red');
   });
 
-  it('the earlier trigger wins: idle red before the limit ends', () => {
-    expect(rules.evaluate(ownStep({ limitDays: 10 }), '2026-11-04').colour).toBe('red');
+  it('a step with a limit ignores the "no movement" rule: limit 5 is still green after 3 idle days', () => {
+    expect(rules.evaluate(ownStep({ limitDays: 5 }), '2026-11-04').colour).toBe('green');
+  });
+
+  it('a step with a limit is yellow only the day before the limit, never earlier because of idling', () => {
+    const step = ownStep({ limitDays: 10 });
+    expect(rules.evaluate(step, '2026-11-09').colour).toBe('green');
+    expect(rules.evaluate(step, '2026-11-10').colour).toBe('yellow');
+    expect(rules.evaluate(step, '2026-11-11')).toMatchObject({ colour: 'red', daysOverdue: 1 });
   });
 });
 

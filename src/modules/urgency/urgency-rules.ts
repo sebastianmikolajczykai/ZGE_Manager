@@ -3,7 +3,10 @@ import { PolishHolidays } from './polish-holidays.js';
 
 export type Colour = 'green' | 'yellow' | 'red';
 
-/** own = krok robimy my; waiting = czekamy na urząd lub klienta (liczy się tylko limit kroku). */
+/**
+ * own = krok robimy my: z limitem liczy się limit, bez limitu progi „brak ruchu”;
+ * waiting = czekamy na urząd lub klienta (liczy się tylko limit kroku).
+ */
 export type StepKind = 'own' | 'waiting';
 
 export interface UrgencySettings {
@@ -97,7 +100,8 @@ export class UrgencyRules {
     const elapsed = counter.daysBetween(step.startedOn, today);
     const daysToLimit = step.limitDays === null ? null : step.limitDays - elapsed;
 
-    const idleRules = step.kind === 'own';
+    // „Brak ruchu” tylko w krokach bez limitu: gdy krok ma limit, kolor wynika z limitu (żółte przed limitem, czerwone w dniu limitu).
+    const idleRules = step.kind === 'own' && step.limitDays === null;
     const idleOverdue = idleRules ? idle - settings.redAfterIdleDays + 1 : 0;
     const limitOverdue = daysToLimit === null ? 0 : 1 - daysToLimit;
     const daysOverdue = Math.max(0, idleOverdue, limitOverdue);

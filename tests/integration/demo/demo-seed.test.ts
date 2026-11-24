@@ -48,7 +48,7 @@ describe('seedDemo (przykładowe dane do demo)', () => {
 
   it('gives example orders a lead person, so the "Moje" filter shows something for everyone', () => {
     seedDemo(db, today);
-    const owners = new Set(rows().map((r) => r.owner));
+    const owners = new Set(rows().flatMap((r) => r.owners));
     expect(owners).toEqual(new Set(['Łukasz', 'Bartek', 'Marcelina']));
   });
 

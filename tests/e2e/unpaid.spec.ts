@@ -22,7 +22,10 @@ test('niezapłacone: po oddaniu klientowi zlecenie przechodzi do zakładki, SMS 
 
   const card = page.getByRole('region', { name: 'Szczegóły zlecenia' });
   for (let step = 1; step <= 12; step++) {
-    await clickAndConfirm(page, card.getByRole('button', { name: /^(Zrobione|Zakończone): Łukasz$/ }));
+    await clickAndConfirm(
+      page,
+      card.getByRole('button', { name: /^(Zrobione|Zakończone): Łukasz$/ }).first(),
+    );
     await expect(card.getByRole('heading', { name: client })).toBeVisible();
   }
   await expect(page.getByRole('row', { name: new RegExp(client) })).toHaveCount(0);

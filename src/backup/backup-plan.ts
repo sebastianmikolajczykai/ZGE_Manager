@@ -8,6 +8,11 @@ export function backupFileName(day: LocalDate): string {
   return `zge-${day}.db`;
 }
 
+/** Kopia przed aktualizacją programu, np. zge-przed-aktualizacja-2026-11-24.db (druga tego dnia: …-2.db). */
+export function updateBackupFileName(day: LocalDate, number: number): string {
+  return number === 1 ? `zge-przed-aktualizacja-${day}.db` : `zge-przed-aktualizacja-${day}-${number}.db`;
+}
+
 /** Najstarsze kopie ponad limit (nazwy z datą RRRR-MM-DD sortują się tak jak daty). */
 export function backupsToDelete(fileNames: readonly string[], keep: number): string[] {
   const backups = fileNames.filter((name) => DAILY_BACKUP.test(name)).sort();

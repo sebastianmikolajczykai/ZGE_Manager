@@ -65,6 +65,7 @@ describe('web routes', () => {
       const saved = await post(`/zlecenia/${id}/osoby`, {
         leadPerson: 'Anna',
         step_1: 'Piotr',
+        step_2: 'Piotr', // w „Podziale” krok 2 idzie równolegle z krokiem 1
         person: 'Anna',
       });
       expect(saved.statusCode).toBe(303);

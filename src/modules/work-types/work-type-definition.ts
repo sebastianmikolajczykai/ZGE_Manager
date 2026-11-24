@@ -28,6 +28,11 @@ export interface StepTemplate {
   provisional: boolean;
   /** true = krok „Zapłata”: zlecenie przechodzi wtedy z tablicy do zakładki Niezapłacone. */
   payment?: boolean;
+  /**
+   * true = krok startuje razem z poprzednim (ten sam dzień 0, osobny limit, osoba i przycisk).
+   * Następny krok zaczyna się dopiero, gdy wszystkie kroki z takiej grupy są odhaczone.
+   */
+  parallel?: boolean;
 }
 
 export interface WorkTypeDefinition {
@@ -49,6 +54,21 @@ export function validateWorkType(def: WorkTypeDefinition): void {
   if (def.steps.filter((s) => s.payment).length > 1) {
     throw new Error(`Rodzaj pracy „${def.name}” może mieć tylko jeden krok zapłaty`);
   }
+  validateParallel(def.steps);
+}
+
+/** Krok 1 nie ma poprzednika; krok zapłaty zawsze idzie sam (od niego zlecenie przechodzi do Niezapłaconych). */
+function validateParallel(steps: StepTemplate[]): void {
+  steps.forEach((step, index) => {
+    if (!step.parallel) return;
+    if (index === 0)
+      throw new Error(`Krok 1 („${step.name}”) nie może być równoległy: nie ma kroku przed nim`);
+    const previous = steps[index - 1] as StepTemplate;
+    if (step.payment || previous.payment) {
+      const payment = step.payment ? step : previous;
+      throw new Error(`Krok zapłaty „${payment.name}” nie może iść równolegle z innym krokiem`);
+    }
+  });
 }
 
 function validateStep(step: StepTemplate, position: number): void {

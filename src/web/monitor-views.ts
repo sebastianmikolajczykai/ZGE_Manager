@@ -82,9 +82,9 @@ function tile(r: BoardRow): SafeHtml {
   </article>`;
 }
 
-/** Czyja kolej: osoba bieżącego kroku; gdy nikt nie jest przypisany, kto ostatnio coś zrobił. */
+/** Czyja kolej: osoby bieżących kroków; gdy nikt nie jest przypisany, kto ostatnio coś zrobił. */
 function who(r: BoardRow): SafeHtml | string {
-  if (r.owner) return html`${avatar(r.owner)} ${r.owner}`;
+  if (r.owners.length > 0) return html`${r.owners.map((name) => html`${avatar(name)} ${name} `)}`;
   if (r.lastPerson) return html`<small>ostatnio</small> ${avatar(r.lastPerson)} ${r.lastPerson}`;
   return '–';
 }
