@@ -1,6 +1,5 @@
 @echo off
-rem Zatrzymuje działającego ZGE Menedżera (np. przed przywróceniem kopii bazy).
-chcp 65001 >nul
+rem Zatrzymuje dzialajacego ZGE Menedzera (np. przed przywroceniem kopii bazy).
 setlocal
 if not defined PORT set "PORT=3000"
 set "ZNALEZIONO="
@@ -8,6 +7,6 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr "LISTENING" ^| findstr /c:"12
   taskkill /PID %%p /T /F >nul 2>nul
   set "ZNALEZIONO=1"
 )
-if defined ZNALEZIONO (echo ZGE Menedżer został zatrzymany.) else (echo ZGE Menedżer nie był uruchomiony.)
+if defined ZNALEZIONO (echo ZGE Menedzer zostal zatrzymany.) else (echo ZGE Menedzer nie byl uruchomiony.)
 if not defined ZGE_BEZ_PAUZY pause
 exit /b 0

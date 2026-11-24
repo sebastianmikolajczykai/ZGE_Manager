@@ -1,13 +1,12 @@
 @echo off
-rem Usuwa ZGE Menedżera z autostartu Windowsa. Aplikację nadal można uruchomić plikiem "Uruchom ZGE.bat".
-chcp 65001 >nul
+rem Usuwa ZGE Menedzera z autostartu Windowsa. Aplikacje nadal mozna uruchomic plikiem "Uruchom ZGE.bat".
 setlocal
-set "ZGE_SKROT=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ZGE Menedżer.lnk"
+set "ZGE_SKROT=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ZGE Menedzer.lnk"
 if exist "%ZGE_SKROT%" (
   del "%ZGE_SKROT%"
-  echo Autostart wyłączony.
+  echo Autostart wylaczony.
 ) else (
-  echo Autostart nie był włączony.
+  echo Autostart nie byl wlaczony.
 )
 if not defined ZGE_BEZ_PAUZY pause
 exit /b 0

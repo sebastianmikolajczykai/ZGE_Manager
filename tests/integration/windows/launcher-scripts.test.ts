@@ -87,7 +87,7 @@ describe.runIf(process.platform === 'win32')('pliki Windows: uruchomienie, kopia
       'Start Menu',
       'Programs',
       'Startup',
-      'ZGE Menedżer.lnk',
+      'ZGE Menedzer.lnk',
     );
 
     expectSuccess('Włącz autostart.bat', env);

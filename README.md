@@ -17,7 +17,7 @@ Robi się to raz. Potrzebny jest internet (tylko przy pierwszym uruchomieniu).
 4. **Kliknij dwa razy `Włącz autostart.bat`**. Od teraz aplikacja uruchomi się sama po włączeniu komputera.
 5. **Ustaw folder na kopie** (zalecane, patrz niżej).
 
-Na pasku zadań pojawi się zminimalizowane okno „ZGE Menedżer - nie zamykaj tego okna”. To jest działająca aplikacja: zamknięcie tego okna ją wyłącza.
+Na pasku zadań pojawi się zminimalizowane okno „ZGE Menedzer - nie zamykaj tego okna”. To jest działająca aplikacja: zamknięcie tego okna ją wyłącza.
 
 | Plik                   | Co robi                                                                                 |
 | ---------------------- | --------------------------------------------------------------------------------------- |
