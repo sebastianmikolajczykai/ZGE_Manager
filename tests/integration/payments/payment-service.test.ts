@@ -80,6 +80,11 @@ describe('PaymentService (zakładka Niezapłacone)', () => {
     ]);
   });
 
+  it('row carries the payment step limit (for the calendar reminder date)', () => {
+    handedOver(); // limit kroku zapłaty: 3 dni
+    expect(payments.rows()[0]?.limitDays).toBe(3);
+  });
+
   it('orders before the payment step stay on the board only', () => {
     const id = createOrder();
     expect(board.rows().map((r) => r.orderId)).toContain(id);

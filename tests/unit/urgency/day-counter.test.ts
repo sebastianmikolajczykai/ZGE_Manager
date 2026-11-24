@@ -110,3 +110,47 @@ describe('DayCounter: company days off (Ustawienia → Dni wolne firmy)', () => 
     expect(new DayCounter('calendar', undefined, dayOff).daysBetween('2026-11-16', '2026-11-18')).toBe(2);
   });
 });
+
+describe('DayCounter: termin po N dniach (do przypomnień w kalendarzu)', () => {
+  const working = new DayCounter('working');
+
+  it('adds working days, skipping the weekend (Fri + 1 = Mon)', () => {
+    expect(working.addDays('2026-11-20', 1)).toBe('2026-11-23');
+  });
+
+  it('7 working days from Monday is Wednesday next week', () => {
+    expect(working.addDays('2026-11-16', 7)).toBe('2026-11-25');
+  });
+
+  it('skips holidays (Christmas)', () => {
+    // Wed 23.12 + 1 = Mon 28.12 (24, 25 holidays, 26–27 weekend)
+    expect(working.addDays('2026-12-23', 1)).toBe('2026-12-28');
+  });
+
+  it('0 days returns the same date', () => {
+    expect(working.addDays('2026-11-22', 0)).toBe('2026-11-22');
+  });
+
+  it('result agrees with daysBetween', () => {
+    const due = working.addDays('2026-11-16', 14);
+    expect(working.daysBetween('2026-11-16', due)).toBe(14);
+  });
+
+  it('rejects a negative number of days', () => {
+    expect(() => working.addDays('2026-11-16', -1)).toThrow(/ujemna/);
+  });
+
+  it('calendar mode adds plain days', () => {
+    expect(new DayCounter('calendar').addDays('2026-11-20', 2)).toBe('2026-11-22');
+  });
+
+  it('next working day on or after: Saturday → Monday, Monday stays', () => {
+    expect(working.workingDayOnOrAfter('2026-11-21')).toBe('2026-11-23');
+    expect(working.workingDayOnOrAfter('2026-11-23')).toBe('2026-11-23');
+  });
+
+  it('respects company days off', () => {
+    const withDayOff = new DayCounter('working', undefined, (d) => d === '2026-11-23');
+    expect(withDayOff.workingDayOnOrAfter('2026-11-21')).toBe('2026-11-24');
+  });
+});

@@ -36,6 +36,25 @@ export class DayCounter {
     return count;
   }
 
+  /** Dzień, w którym od `from` minie `days` dni (np. termin telefonu po 7 dniach roboczych). */
+  addDays(from: LocalDate, days: number): LocalDate {
+    if (!Number.isInteger(days) || days < 0) throw new Error(`Liczba dni nie może być ujemna (jest ${days})`);
+    let day = toEpochDay(from);
+    if (this.mode === 'calendar') return toIsoDate(day + days);
+    for (let left = days; left > 0;) {
+      day++;
+      if (this.isWorkingEpochDay(day)) left--;
+    }
+    return toIsoDate(day);
+  }
+
+  /** Ten sam dzień, jeśli jest roboczy, w przeciwnym razie najbliższy następny dzień roboczy. */
+  workingDayOnOrAfter(date: LocalDate): LocalDate {
+    let day = toEpochDay(date);
+    while (this.mode === 'working' && !this.isWorkingEpochDay(day)) day++;
+    return toIsoDate(day);
+  }
+
   private isWorkingEpochDay(epochDay: number): boolean {
     if (!isWeekday(epochDay)) return false;
     const date = toIsoDate(epochDay);

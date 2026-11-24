@@ -79,6 +79,16 @@ export class UrgencyRules {
     return this.snapshot().counter.daysBetween(from, to);
   }
 
+  /** Termin po `days` dniach (robocze, bez świąt i dni wolnych firmy) – do przypomnień w kalendarzu. */
+  addDays(from: LocalDate, days: number): LocalDate {
+    return this.snapshot().counter.addDays(from, days);
+  }
+
+  /** Dziś, jeśli to dzień roboczy, inaczej najbliższy dzień roboczy. */
+  workingDayOnOrAfter(date: LocalDate): LocalDate {
+    return this.snapshot().counter.workingDayOnOrAfter(date);
+  }
+
   evaluate(step: StepState, today: LocalDate): Urgency {
     const { settings, counter } = this.snapshot();
     validateStep(step, counter);

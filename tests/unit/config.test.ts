@@ -12,6 +12,8 @@ describe('loadConfig', () => {
       demo: false,
       backupDir: path.resolve('dane/kopie'),
       backupKeep: 30,
+      google: null,
+      googleTokenFile: path.resolve('dane/google-token.json'),
     });
   });
 
@@ -41,5 +43,15 @@ describe('loadConfig', () => {
 
   it('rejects a non-numeric PORT', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/);
+  });
+
+  it('Google keys come only from env (both needed), token file in dane/ by default', () => {
+    expect(loadConfig({ GOOGLE_CLIENT_ID: 'id' }).google).toBeNull();
+    expect(loadConfig({ GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 's' }).google).toEqual({
+      clientId: 'id',
+      clientSecret: 's',
+    });
+    expect(loadConfig({ GOOGLE_CLIENT_ID: ' ', GOOGLE_CLIENT_SECRET: 's' }).google).toBeNull();
+    expect(loadConfig({ GOOGLE_TOKEN_FILE: '/x/t.json' }).googleTokenFile).toBe(path.resolve('/x/t.json'));
   });
 });
