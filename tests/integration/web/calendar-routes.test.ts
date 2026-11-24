@@ -198,13 +198,26 @@ describe('Ustawienia → Kalendarz Google (ekran)', () => {
     });
     const orderId = Number(String(created.headers.location).split('zlecenie=')[1]);
     await post(`/zlecenia/${orderId}/kroki/1/zrobione`, { person: 'Anna' });
+    const unpaidCard = `/niezaplacone?zlecenie=${orderId}`;
+    const manual = 'Dodaj przypomnienie do Kalendarza Google';
+    expect((await app.inject({ method: 'GET', url: unpaidCard })).body).toContain(manual);
     await post('/kalendarz-google/wlacz', { person: 'Anna', on: '1' });
     await post('/kalendarz-google/synchronizuj');
     expect(api.titles()).toEqual(['Zadzwoń: zapłata, zlecenie 125 podział @ 2026-11-19']);
+    expect((await app.inject({ method: 'GET', url: unpaidCard })).body).not.toContain(manual);
 
     await post(`/niezaplacone/${orderId}/zaplacone`, { person: 'Anna' });
     await post('/kalendarz-google/synchronizuj');
     expect(api.titles()).toEqual([]);
+  });
+
+  it('manual „Dodaj przypomnienie” button is hidden while auto sync is on (no duplicates)', async () => {
+    const created = await createOffer();
+    const offerUrl = String(created.headers.location);
+    const manual = 'Dodaj przypomnienie do Kalendarza Google';
+    expect((await app.inject({ method: 'GET', url: offerUrl })).body).toContain(manual);
+    await post('/kalendarz-google/wlacz', { person: 'Anna', on: '1' });
+    expect((await app.inject({ method: 'GET', url: offerUrl })).body).not.toContain(manual);
   });
 
   it('switching requires a person', async () => {

@@ -102,6 +102,8 @@ export function unpaidDetail(
   people: Person[],
   undoableIds: number[] = [],
   messageBox: SafeHtml | null = null,
+  /** Przycisk „Dodaj przypomnienie do Kalendarza Google” (ukryty, gdy działa automatyczna synchronizacja). */
+  showReminderButton = true,
 ): SafeHtml {
   const noteField = html`<label
     >Notatka z rozmowy <small>(opcjonalnie)</small><textarea name="note"></textarea>
@@ -133,7 +135,7 @@ export function unpaidDetail(
     <div class="offer-call">
       <p class="now-label">CO TERAZ · 📞 PRZYPOMNIENIE O ZAPŁACIE</p>
       ${personButtons(`/niezaplacone/${row.orderId}/rozmowa`, 'Rozmowa', people, 'secondary', noteField)}
-      ${reminderButton(paymentReminderEvent(row, row.remindOn), 'Dzień przypomnienia')}
+      ${showReminderButton ? reminderButton(paymentReminderEvent(row, row.remindOn), 'Dzień przypomnienia') : ''}
     </div>
     <h3>Klient zapłacił</h3>
     ${personButtons(`/niezaplacone/${row.orderId}/zaplacone`, 'Zapłacone', people, 'primary')}
