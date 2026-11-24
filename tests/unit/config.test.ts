@@ -10,6 +10,8 @@ describe('loadConfig', () => {
       port: 4000,
       host: '127.0.0.1',
       demo: false,
+      backupDir: path.resolve('dane/kopie'),
+      backupKeep: 30,
     });
   });
 
@@ -24,6 +26,17 @@ describe('loadConfig', () => {
     expect(loadConfig({ ZGE_DEMO: '1' }).demo).toBe(true);
     expect(loadConfig({ ZGE_DEMO: '0' }).demo).toBe(false);
     expect(loadConfig({}).demo).toBe(false);
+  });
+
+  it('reads the daily backup folder and the number of copies to keep', () => {
+    const cfg = loadConfig({ BACKUP_DIR: '/OneDrive/ZGE kopie', BACKUP_KEEP: '14' });
+    expect(cfg.backupDir).toBe(path.resolve('/OneDrive/ZGE kopie'));
+    expect(cfg.backupKeep).toBe(14);
+  });
+
+  it('rejects a number of backup copies that is not a positive whole number', () => {
+    expect(() => loadConfig({ BACKUP_KEEP: '0' })).toThrow(/BACKUP_KEEP/);
+    expect(() => loadConfig({ BACKUP_KEEP: 'dużo' })).toThrow(/BACKUP_KEEP/);
   });
 
   it('rejects a non-numeric PORT', () => {
