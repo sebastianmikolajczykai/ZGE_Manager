@@ -112,6 +112,7 @@ function renderOffers(
       s.people.list(),
       s.offers.reminderDays(),
       s.offers.undoableEntryId(offerId),
+      offer.status === 'open' ? s.offers.callDueOn(offerId) : null,
     );
   }
   return s.pages.send(

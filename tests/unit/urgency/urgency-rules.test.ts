@@ -252,3 +252,28 @@ describe('UrgencyRules: company days off', () => {
     expect(new UrgencyRules(withDayOff).daysBetween('2026-11-16', '2026-11-18')).toBe(1);
   });
 });
+
+describe('UrgencyRules.dueOn: kiedy zadzwonić (dzień, w którym sprawa robi się czerwona)', () => {
+  it('is the day the limit runs out, counted from the last contact', () => {
+    expect(rules.dueOn('2026-11-01', 7, '2026-11-02')).toBe('2026-11-08');
+  });
+
+  it('is today when the deadline has already passed (no reminders in the past)', () => {
+    expect(rules.dueOn('2026-11-01', 7, '2026-11-20')).toBe('2026-11-20');
+  });
+
+  it('is today when there is no limit', () => {
+    expect(rules.dueOn('2026-11-01', null, '2026-11-05')).toBe('2026-11-05');
+  });
+
+  it('agrees with the colour: red exactly on that day', () => {
+    const due = rules.dueOn('2026-11-01', 7, '2026-11-01');
+    const step: StepState = {
+      kind: 'waiting',
+      limitDays: 7,
+      startedOn: '2026-11-01',
+      lastActivityOn: '2026-11-01',
+    };
+    expect(rules.evaluate(step, due).colour).toBe('red');
+  });
+});

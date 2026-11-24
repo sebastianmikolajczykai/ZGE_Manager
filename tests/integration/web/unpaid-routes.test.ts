@@ -80,12 +80,13 @@ describe('Niezapłacone screens', () => {
     expect(page.body).toContain('zadzwoń i przypomnij o zapłacie');
   });
 
-  it('shows the total still to be paid and a red badge in the menu when someone should be reminded', async () => {
+  it('shows how many orders wait for payment (no total amount: the monitor is visible to guests) and a red badge', async () => {
     await handOver();
     await handOver();
     today = '2026-12-10';
     const page = (await get('/niezaplacone')).body;
-    expect(page).toMatch(/Razem do zapłaty[\s\S]*?6000 zł/);
+    expect(page).toMatch(/Czeka na zapłatę[\s\S]*?<b[^>]*>2</);
+    expect(page).not.toContain('zł');
     expect(page).toMatch(/Do przypomnienia dziś[\s\S]*?<b[^>]*>2</);
     const menu = page.slice(page.indexOf('<aside'), page.indexOf('</aside>'));
     expect(menu).toMatch(/href="\/niezaplacone"[\s\S]*?class="badge"[^>]*>2</);
@@ -253,5 +254,42 @@ describe('Niezapłacone screens', () => {
     const res = await get('/niezaplacone?zlecenie=999');
     expect(res.statusCode).toBe(404);
     expect(res.body).toContain('Nie ma zlecenia o numerze 999');
+  });
+
+  describe('ukryte kwoty i przypomnienie w Kalendarzu Google', () => {
+    it('the list shows the order number instead of the client and no amounts; the amount is on the opened card', async () => {
+      const id = await handOver();
+      await post(`/zlecenia/${id}/numer`, { orderNumber: '125 podział', person: 'Anna' });
+      const list = (await get('/niezaplacone')).body;
+      expect(list).toContain('125 podział');
+      expect(list).not.toContain('Karol Dłużnik');
+      expect(list).not.toContain('zł');
+      const card = (await get(`/niezaplacone?zlecenie=${id}`)).body;
+      expect(card).toContain('Karol Dłużnik');
+      expect(card).toContain('3000 zł');
+    });
+
+    it('"recently paid" shows no amounts', async () => {
+      const id = await handOver();
+      await post(`/niezaplacone/${id}/zaplacone`, { person: 'Anna' });
+      const page = (await get('/niezaplacone')).body;
+      expect(page).toContain('Ostatnio zapłacone');
+      expect(page).not.toContain('zł');
+    });
+
+    it('the card offers a payment reminder in Google Calendar on the day the limit runs out', async () => {
+      const id = await handOver(); // pt 20.11, limit 14 dni roboczych → 10.12
+      await post(`/zlecenia/${id}/numer`, { orderNumber: '125 podział', person: 'Anna' });
+      const card = (await get(`/niezaplacone?zlecenie=${id}`)).body;
+      const href = card.match(
+        /href="(https:\/\/calendar\.google\.com[^"]*)"[^>]*>[\s\S]*?Dodaj przypomnienie/,
+      )?.[1];
+      expect(href, 'brak przycisku kalendarza').toBeDefined();
+      const url = new URL((href ?? '').replaceAll('&amp;', '&'));
+      expect(url.searchParams.get('text')).toBe('Przypomnij o zapłacie: 125 podział');
+      expect(url.searchParams.get('dates')).toBe('20261210/20261211');
+      expect(url.searchParams.get('details')).not.toContain('zł');
+      expect(card).toContain('10.12.2026');
+    });
   });
 });

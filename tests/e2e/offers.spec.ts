@@ -18,7 +18,13 @@ test('oferta: dodanie, telefon z notatką, przyjęcie i zlecenie z wypełnionymi
   const panel = page.getByRole('region', { name: 'Szczegóły oferty' });
   await expect(panel.getByRole('heading', { name: client })).toBeVisible();
   await expect(panel.getByText('w terminie')).toBeVisible();
-  await expect(page.getByRole('row', { name: new RegExp(client) })).toContainText('3200 zł');
+  // Cena tylko na rozwiniętej karcie: na liście (monitor widzą goście) kwot nie ma.
+  await expect(panel.getByText('3200 zł')).toBeVisible();
+  await expect(page.getByRole('row', { name: new RegExp(client) })).not.toContainText('zł');
+  await expect(panel.getByRole('link', { name: /Dodaj przypomnienie do Kalendarza Google/ })).toHaveAttribute(
+    'href',
+    /^https:\/\/calendar\.google\.com\/calendar\/render\?/,
+  );
 
   await panel.getByLabel('Notatka z rozmowy').fill('myśli, oddzwoni w pon.');
   await clickAndConfirm(page, panel.getByRole('button', { name: 'Rozmowa: Bartek' }));
