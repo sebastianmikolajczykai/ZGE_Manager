@@ -12,10 +12,13 @@ import { fileURLToPath } from 'node:url';
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const TEST_PORT = '3987';
 const STARTUP_TIMEOUT_MS = 180_000;
+let runCount = 0;
 
 /** Uruchamia plik .bat; zwraca kod wyjścia i to, co plik wypisał (do diagnozy w CI). */
 function runScript(name: string, env: NodeJS.ProcessEnv): { status: number | null; output: string } {
-  const logFile = path.join(env.ZGE_TEST_DIR as string, `${name}.log`);
+  // Osobny plik na każde uruchomienie: serwer startowany w tle dziedziczy uchwyt pliku z pierwszego uruchomienia.
+  runCount += 1;
+  const logFile = path.join(env.ZGE_TEST_DIR as string, `${runCount}-${name}.log`);
   // Wyjście do pliku, a nie do potoku: uruchomiony w tle serwer nie trzyma potoków, więc test nie czeka na jego koniec.
   const result = spawnSync('cmd.exe', ['/d', '/s', '/c', `""${name}" > "${logFile}" 2>&1"`], {
     cwd: REPO,
