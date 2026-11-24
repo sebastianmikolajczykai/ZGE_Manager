@@ -169,4 +169,41 @@ describe('offer screens', () => {
     expect(res.body).toContain('Kto wysłał');
     expect(res.body).toContain('value="2026-11-20"');
   });
+
+  describe('ukryte kwoty i przypomnienie w Kalendarzu Google', () => {
+    it('the offers list shows no prices; the price is on the opened card', async () => {
+      const id = idFrom((await createOffer()).headers.location);
+      const list = (await app.inject({ method: 'GET', url: '/oferty' })).body;
+      expect(list).toContain('Ewa Ofertowa');
+      expect(list).not.toContain('zł');
+      const card = (await app.inject({ method: 'GET', url: `/oferty?oferta=${id}` })).body;
+      expect(card).toContain('2800 zł');
+    });
+
+    it('an open offer card has "Dodaj przypomnienie" for the call day (7 working days after sending)', async () => {
+      const id = idFrom((await createOffer()).headers.location);
+      const card = (await app.inject({ method: 'GET', url: `/oferty?oferta=${id}` })).body;
+      const href = card.match(
+        /href="(https:\/\/calendar\.google\.com[^"]*)"[^>]*>[\s\S]*?Dodaj przypomnienie/,
+      )?.[1];
+      expect(href, 'brak przycisku kalendarza').toBeDefined();
+      const url = new URL((href ?? '').replaceAll('&amp;', '&'));
+      expect(url.searchParams.get('text')).not.toContain('Ewa Ofertowa');
+      expect(url.searchParams.get('details')).toContain('Klient: Ewa Ofertowa');
+      expect(url.searchParams.get('details')).not.toContain('zł');
+      expect(card).toMatch(/target="_blank"/);
+    });
+
+    it('a closed offer has no reminder button', async () => {
+      const id = idFrom((await createOffer()).headers.location);
+      await app.inject({
+        method: 'POST',
+        url: `/oferty/${id}/telefon`,
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: 'person=Anna&next=end',
+      });
+      const card = (await app.inject({ method: 'GET', url: `/oferty?oferta=${id}` })).body;
+      expect(card).not.toContain('calendar.google.com');
+    });
+  });
 });

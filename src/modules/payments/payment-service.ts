@@ -6,6 +6,8 @@ import type { Order, OrderService, OrderStep } from '../orders/order-service.js'
 /** Jeden wiersz zakładki Niezapłacone. */
 export interface UnpaidRow {
   orderId: number;
+  /** Numer zlecenia z biura (null = starsze zlecenie bez numeru). */
+  orderNumber: string | null;
   clientName: string;
   phone: string;
   town: string;
@@ -17,11 +19,14 @@ export interface UnpaidRow {
   daysSinceContact: number;
   lastPerson: string | null;
   urgency: Urgency;
+  /** Kiedy zadzwonić o zapłatę (do przypomnienia w Kalendarzu Google): koniec limitu, najwcześniej dziś. */
+  remindOn: LocalDate;
 }
 
 /** Zlecenie oznaczone „Zapłacone” (do listy „Ostatnio zapłacone”, skąd można wejść na kartę i cofnąć). */
 export interface PaidRow {
   orderId: number;
+  orderNumber: string | null;
   clientName: string;
   pricePln: number | null;
   paidOn: LocalDate;
@@ -85,12 +90,13 @@ export class PaymentService {
   recentlyPaid(limit = RECENT_LIMIT): PaidRow[] {
     const rows = this.db.connection
       .prepare(
-        `SELECT o.id, o.client_name, o.price_grosze, s.done_on, s.done_by
+        `SELECT o.id, o.order_number, o.client_name, o.price_grosze, s.done_on, s.done_by
          FROM orders o JOIN order_steps s ON s.order_id = o.id AND s.payment = 1 AND s.status = 'done'
          ORDER BY s.done_on DESC, o.id DESC LIMIT ?`,
       )
       .all(limit) as {
       id: number;
+      order_number: string | null;
       client_name: string;
       price_grosze: number | null;
       done_on: string;
@@ -98,6 +104,7 @@ export class PaymentService {
     }[];
     return rows.map((r) => ({
       orderId: r.id,
+      orderNumber: r.order_number,
       clientName: r.client_name,
       pricePln: r.price_grosze === null ? null : r.price_grosze / GROSZE_PER_PLN,
       paidOn: r.done_on,
@@ -109,6 +116,7 @@ export class PaymentService {
     const lastContactOn = lastContactOf(step);
     return {
       orderId: order.id,
+      orderNumber: order.orderNumber,
       clientName: order.clientName,
       phone: order.phone,
       town: order.town,
@@ -118,6 +126,7 @@ export class PaymentService {
       daysSinceContact: this.rules.daysBetween(lastContactOn, today),
       lastPerson: this.lastPerson(order.id),
       urgency: this.urgencyOf(step, today),
+      remindOn: this.rules.dueOn(lastContactOn, step.limitDays, today),
     };
   }
 

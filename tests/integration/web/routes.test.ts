@@ -195,6 +195,41 @@ describe('web routes', () => {
     expect(page.body).not.toContain('Ewa');
   });
 
+  it('order number typed in the form is shown on the board instead of the client; price only on the card', async () => {
+    await createOrder({ orderNumber: '125 podział', pricePln: '2 500' });
+    const board = (await app.inject({ method: 'GET', url: '/' })).body;
+    expect(board).toContain('125 podział');
+    expect(board).not.toContain('2500 zł');
+    const card = (await app.inject({ method: 'GET', url: '/?zlecenie=1' })).body;
+    expect(card).toContain('2500 zł');
+  });
+
+  it('the number can be added later on the card and the change is kept in the history', async () => {
+    await createOrder();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/numer',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'orderNumber=126+syt+wys&person=Anna',
+    });
+    expect(res.statusCode).toBe(303);
+    const card = (await app.inject({ method: 'GET', url: '/?zlecenie=1' })).body;
+    expect(card).toMatch(/<h2>126 syt wys<\/h2>/);
+    expect(card).toContain('Anna: numer zlecenia (brak → 126 syt wys)');
+  });
+
+  it('a too long number shows a readable error', async () => {
+    await createOrder();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/zlecenia/1/numer',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: `orderNumber=${'x'.repeat(41)}&person=Anna`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('Numer zlecenia może mieć najwyżej 40 znaków');
+  });
+
   it('price typed with a comma and spaces is understood (2 500,50 → 2500,50 zł)', async () => {
     await createOrder({ pricePln: '2 500,50' });
     const page = await app.inject({ method: 'GET', url: '/?zlecenie=1' });

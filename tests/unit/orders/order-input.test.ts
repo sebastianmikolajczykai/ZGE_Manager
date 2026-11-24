@@ -55,3 +55,21 @@ describe('parseOrderInput', () => {
     expect(() => parseOrderInput({ ...valid, workTypeId: 0 })).toThrow(/rodzaj pracy/i);
   });
 });
+
+describe('parseOrderInput: numer zlecenia (opcjonalny, litery i cyfry)', () => {
+  it('keeps the office number with letters, trimmed', () => {
+    expect(parseOrderInput({ ...valid, orderNumber: '  125 podział ' }).orderNumber).toBe('125 podział');
+  });
+
+  it.each([undefined, null, '', '   '])('treats %j as no number', (orderNumber) => {
+    expect(parseOrderInput({ ...valid, orderNumber }).orderNumber).toBeNull();
+  });
+
+  it('rejects a number longer than 40 characters', () => {
+    expect(() => parseOrderInput({ ...valid, orderNumber: 'x'.repeat(41) })).toThrow(/Numer zlecenia/);
+  });
+
+  it('accepts exactly 40 characters', () => {
+    expect(parseOrderInput({ ...valid, orderNumber: 'x'.repeat(40) }).orderNumber).toHaveLength(40);
+  });
+});

@@ -8,6 +8,8 @@ import { isWaitingForMeasurementDate } from '../orders/measurement.js';
 /** Jeden wiersz tablicy „Na dziś”. */
 export interface BoardRow {
   orderId: number;
+  /** Numer zlecenia z biura, pokazywany na liście zamiast klienta (null = starsze zlecenie bez numeru). */
+  orderNumber: string | null;
   clientName: string;
   town: string;
   plot: string | null;
@@ -75,6 +77,7 @@ export class BoardService {
     const urgency = this.urgencyOf(order, step, today);
     const row: BoardRow = {
       orderId: order.id,
+      orderNumber: order.orderNumber,
       clientName: order.clientName,
       town: order.town,
       plot: order.plot,

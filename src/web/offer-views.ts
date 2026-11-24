@@ -19,6 +19,9 @@ import type {
 import type { Person } from '../modules/people/people-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { Urgency } from '../modules/urgency/urgency-rules.js';
+import type { LocalDate } from '../modules/urgency/day-counter.js';
+import { offerCallEvent } from '../modules/calendar/follow-up-events.js';
+import { reminderButton } from './calendar-views.js';
 
 const OFFER_COLOUR_LABEL = {
   green: 'w terminie',
@@ -75,7 +78,6 @@ function offersTable(rows: OfferRow[], selectedId: number | null): SafeHtml {
         <th>Status</th>
         <th>Klient</th>
         <th>Miejscowość</th>
-        <th class="num">Cena</th>
         <th>Wysłana</th>
         <th class="num">Dni od kontaktu</th>
         <th>Kto</th>
@@ -91,7 +93,6 @@ function offersTable(rows: OfferRow[], selectedId: number | null): SafeHtml {
             <td>${statusChip(r.urgency.colour, OFFER_COLOUR_LABEL[r.urgency.colour])}</td>
             <td><a href="/oferty?oferta=${r.offerId}">${r.clientName}</a><small>${r.workTypeName}</small></td>
             <td>${r.town ?? '–'}</td>
-            <td class="num">${formatPrice(r.pricePln)}</td>
             <td>${formatDate(r.sentOn)}</td>
             <td class="num"><b>${r.daysSinceContact}</b></td>
             <td>${personTag(r.lastPerson)}</td>
@@ -109,6 +110,8 @@ export function offerDetail(
   people: Person[],
   reminderDays: number,
   undoableId: number | null = null,
+  /** Dzień telefonu do klienta (przycisk „Dodaj przypomnienie do Kalendarza Google”); null = bez przycisku. */
+  callOn: LocalDate | null = null,
 ): SafeHtml {
   const open = offer.status === 'open';
   return html`<section class="detail" aria-label="Szczegóły oferty">
@@ -152,7 +155,7 @@ export function offerDetail(
           : ''
       }
     </dl>
-    ${open ? offerActions(offer, people, reminderDays) : ''}
+    ${open ? offerActions(offer, workTypeName, people, reminderDays, callOn) : ''}
     ${fold(
       'history',
       `Historia (${history.length})`,
@@ -165,7 +168,13 @@ export function offerDetail(
   </section>`;
 }
 
-function offerActions(offer: Offer, people: Person[], reminderDays: number): SafeHtml {
+function offerActions(
+  offer: Offer,
+  workTypeName: string,
+  people: Person[],
+  reminderDays: number,
+  callOn: LocalDate | null,
+): SafeHtml {
   const callFields = html`<label
       >Notatka z rozmowy <small>(opcjonalnie)</small><textarea name="note"></textarea>
     </label>
@@ -177,6 +186,7 @@ function offerActions(offer: Offer, people: Person[], reminderDays: number): Saf
   return html`<div class="offer-call">
       <p class="now-label">CO TERAZ · 📞 TELEFON DO KLIENTA</p>
       ${personButtons(`/oferty/${offer.id}/telefon`, 'Rozmowa', people, 'primary', callFields)}
+      ${callOn ? reminderButton(offerCallEvent({ ...offer, workTypeName }, callOn), 'Dzień telefonu') : ''}
     </div>
     <p><a class="button secondary" href="/zlecenia/nowe?oferta=${offer.id}">Przyjęta → zrób zlecenie</a></p>
     <details class="reject">

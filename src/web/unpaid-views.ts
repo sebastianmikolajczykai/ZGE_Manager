@@ -1,6 +1,9 @@
 import { html, type SafeHtml } from './html.js';
 import { formatDate, formatPrice, personButtons, personTag, rowClass, statusChip } from './view-helpers.js';
 import { historySection, orderUndo } from './views.js';
+import { reminderButton } from './calendar-views.js';
+import { orderLabel } from '../modules/orders/order-label.js';
+import { paymentReminderEvent } from '../modules/calendar/follow-up-events.js';
 import type { PaidRow, UnpaidRow } from '../modules/payments/payment-service.js';
 import type { HistoryEntry } from '../modules/orders/order-service.js';
 import type { Person } from '../modules/people/people-repository.js';
@@ -34,17 +37,14 @@ export function unpaidPage(
     </div>`;
 }
 
-/** Suma kwot do zapłaty i liczba klientów, którym dziś trzeba przypomnieć. */
+/**
+ * Liczba zleceń czekających na zapłatę i klientów, którym dziś trzeba przypomnieć.
+ * Bez sumy kwot: monitor w biurze widzą goście (kwoty są w Statystykach i na rozwiniętej karcie).
+ */
 function unpaidSummary(rows: UnpaidRow[]): SafeHtml {
-  const total = rows.reduce((sum, r) => sum + (r.pricePln ?? 0), 0);
-  const withoutPrice = rows.filter((r) => r.pricePln === null).length;
   const toRemind = rows.filter((r) => r.urgency.colour === 'red').length;
   return html`<div class="summary">
-    <div>
-      <span>Razem do zapłaty</span
-      ><b>${formatPrice(total)}</b
-      >${withoutPrice > 0 ? html`<small>(${withoutPrice} bez wpisanej kwoty)</small>` : ''}
-    </div>
+    <div><span>Czeka na zapłatę</span><b>${rows.length}</b></div>
     <div><span>Do przypomnienia dziś</span><b class="${toRemind > 0 ? 'late' : ''}">${toRemind}</b></div>
   </div>`;
 }
@@ -56,7 +56,7 @@ function paidList(paid: PaidRow[]): SafeHtml {
       ${paid.map(
         (p) =>
           html`<li>
-            <a href="/?zlecenie=${p.orderId}">${p.clientName}</a> <span>${formatPrice(p.pricePln)}</span>
+            <a href="/?zlecenie=${p.orderId}">${orderLabel(p)}</a>
             <small>${formatDate(p.paidOn)}${p.paidBy ? `, ${p.paidBy}` : ''}</small>
           </li>`,
       )}
@@ -69,9 +69,8 @@ function unpaidTable(rows: UnpaidRow[], selectedId: number | null): SafeHtml {
     <thead>
       <tr>
         <th>Status</th>
-        <th>Klient</th>
+        <th>Zlecenie</th>
         <th>Miejscowość</th>
-        <th class="num">Kwota</th>
         <th>Oddane klientowi</th>
         <th class="num">Dni bez zapłaty</th>
         <th>Kto</th>
@@ -85,9 +84,8 @@ function unpaidTable(rows: UnpaidRow[], selectedId: number | null): SafeHtml {
             onclick="location.href='/niezaplacone?zlecenie=${r.orderId}'"
           >
             <td>${statusChip(r.urgency.colour, UNPAID_SHORT[r.urgency.colour])}</td>
-            <td><a href="/niezaplacone?zlecenie=${r.orderId}">${r.clientName}</a></td>
+            <td><a href="/niezaplacone?zlecenie=${r.orderId}">${orderLabel(r)}</a></td>
             <td>${r.town}</td>
-            <td class="num">${formatPrice(r.pricePln)}</td>
             <td>${formatDate(r.handedOverOn)}</td>
             <td class="num"><b>${r.daysSinceContact}</b></td>
             <td>${personTag(r.lastPerson)}</td>
@@ -110,10 +108,16 @@ export function unpaidDetail(
   </label>`;
   return html`<section class="detail" aria-label="Szczegóły zapłaty">
     <div class="detail-head">
-      <h2>${row.clientName}</h2>
+      <h2>${orderLabel(row)}</h2>
       ${statusChip(urgency.colour, UNPAID_LABEL[urgency.colour])}
     </div>
     <dl>
+      ${
+        row.orderNumber
+          ? html`<dt>Klient</dt>
+              <dd>${row.clientName}</dd>`
+          : ''
+      }
       <dt>Telefon</dt>
       <dd><a href="tel:${row.phone}">${row.phone}</a></dd>
       <dt>Miejscowość</dt>
@@ -129,6 +133,7 @@ export function unpaidDetail(
     <div class="offer-call">
       <p class="now-label">CO TERAZ · 📞 PRZYPOMNIENIE O ZAPŁACIE</p>
       ${personButtons(`/niezaplacone/${row.orderId}/rozmowa`, 'Rozmowa', people, 'secondary', noteField)}
+      ${reminderButton(paymentReminderEvent(row, row.remindOn), 'Dzień przypomnienia')}
     </div>
     <h3>Klient zapłacił</h3>
     ${personButtons(`/niezaplacone/${row.orderId}/zaplacone`, 'Zapłacone', people, 'primary')}

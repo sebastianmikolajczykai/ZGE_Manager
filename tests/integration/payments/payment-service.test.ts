@@ -142,4 +142,31 @@ describe('PaymentService (zakładka Niezapłacone)', () => {
     const id = handedOver();
     expect(() => payments.recordCall(id, ' ', null)).toThrow(/Wybierz, kto/);
   });
+
+  describe('numer zlecenia i przypomnienie w kalendarzu', () => {
+    it('shows the order number on the list (null for orders without one)', () => {
+      const id = handedOver();
+      expect(payments.rows()[0]?.orderNumber).toBeNull();
+      orders.setOrderNumber(id, '125 podział', PERSON);
+      expect(payments.rows()[0]?.orderNumber).toBe('125 podział');
+    });
+
+    it('reminds on the day the payment limit runs out (3 working days: Fri 20.11 → Wed 25.11)', () => {
+      handedOver();
+      expect(payments.rows()[0]?.remindOn).toBe('2026-11-25');
+    });
+
+    it('reminds today when the reminder is already late', () => {
+      handedOver();
+      today = '2026-12-01';
+      expect(payments.rows()[0]?.remindOn).toBe('2026-12-01');
+    });
+
+    it('keeps the number on the "recently paid" list', () => {
+      const id = handedOver();
+      orders.setOrderNumber(id, '126 syt', PERSON);
+      payments.markPaid(id, PERSON);
+      expect(payments.recentlyPaid()[0]?.orderNumber).toBe('126 syt');
+    });
+  });
 });
