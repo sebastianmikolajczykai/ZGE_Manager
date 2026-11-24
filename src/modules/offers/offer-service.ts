@@ -234,6 +234,13 @@ export class OfferService {
     return this.followUpDays();
   }
 
+  /** Dzień telefonu do klienta (do przypomnienia w Kalendarzu Google): koniec okresu przypomnienia, najwcześniej dziś. */
+  callDueOn(offerId: number): LocalDate {
+    const offer = this.get(offerId);
+    if (!offer) throw new Error(`Nie ma oferty o numerze ${offerId}`);
+    return this.rules.dueOn(offer.lastContactOn, this.followUpDays(), this.today());
+  }
+
   urgencyOf(lastContactOn: LocalDate, today: LocalDate): Urgency {
     // Typ „waiting”: liczy się tylko limit dni z Ustawień (bez reguły bezczynności z kroków zleceń).
     return this.rules.evaluate(

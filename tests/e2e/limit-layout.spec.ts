@@ -33,7 +33,7 @@ for (const width of [390, 735, 1366]) {
 
     const panel = page.getByRole('region', { name: 'Szczegóły zlecenia' });
     // „Podział”: kroki 1 i 2 trwają równolegle, każdy ma własną zmianę limitu; sprawdzamy pierwszą.
-    const limitChange = panel.locator('.limit-change').first();
+    const limitChange = panel.locator('.limit-change', { hasText: 'Zmień limit tego kroku' }).first();
     await limitChange.getByText('Zmień limit tego kroku').click();
 
     const label = limitChange.locator('label.setting');

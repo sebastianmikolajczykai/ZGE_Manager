@@ -56,6 +56,10 @@ npm start
 - **Widok na monitor**: `http://localhost:3000/monitor` (link „📺 Widok na monitor” w menu). Duże kafle do powieszenia na telewizorze, odświeża się sam.
 - **Filtr „Moje”**: na Tablicy wybierz osobę z listy. Ta przeglądarka zapamięta wybór i pokaże przycisk „👤 Moje”. Zlecenie jest „czyje” według osoby przypisanej do bieżącego kroku, a gdy jej nie ma, według osoby prowadzącej (karta zlecenia → „Osoby w zleceniu”).
 
+- **Numer zlecenia**: pole „Nr zlecenia” w formularzu (opcjonalne, dowolne litery i cyfry, np. „125 podział”). Na Tablicy, monitorze i w Niezapłaconych widać numer zamiast imienia i nazwiska; klient jest na rozwiniętej karcie i w Statystykach. Numer można wpisać lub zmienić później na karcie („Wpisz numer zlecenia”), zmiana trafia do Historii i da się ją cofnąć. Zlecenia bez numeru wyglądają jak dotąd.
+- **Kwoty ukryte na listach**: Tablica, monitor, lista Ofert i lista Niezapłaconych nie pokazują cen ani sum (monitor widzą goście). Kwotę widać dopiero po kliknięciu (rozwinięta karta) i w Statystykach. Wiadomość SMS „do zapłaty” działa jak wcześniej.
+- **Przypomnienia w Kalendarzu Google**: na karcie otwartej oferty i niezapłaconego zlecenia jest przycisk „📅 Dodaj przypomnienie do Kalendarza Google” na dzień telefonu (koniec okresu przypomnienia, najwcześniej dziś). To **nie jest automatyczna synchronizacja**: przycisk otwiera gotowy formularz w Google, a wydarzenie powstaje dopiero, gdy ktoś kliknie „Zapisz” na swoim koncie. Późniejsze zmiany w aplikacji nie zmieniają wydarzenia w kalendarzu. W tytule nie ma imienia i nazwiska ani kwot (zlecenie: numer; bez numeru imię i nazwisko), klient i telefon są w opisie.
+
 ## Testy (piramida)
 
 | Poziom     | Polecenie                  | Co sprawdza                                                  |

@@ -1,5 +1,7 @@
 import { html, SafeHtml } from './html.js';
 import { googleCalendarLink } from '../modules/calendar/google-calendar-link.js';
+import { orderLabel } from '../modules/orders/order-label.js';
+import { MAX_ORDER_NUMBER_LENGTH } from '../modules/orders/order-input.js';
 import {
   avatar,
   fold,
@@ -173,7 +175,7 @@ export function boardPage(
           <input
             type="search"
             id="szukaj"
-            placeholder="🔍 Szukaj klienta, miejscowości, działki…"
+            placeholder="🔍 Szukaj numeru, klienta, miejscowości, działki…"
             aria-label="Szukaj"
             autocomplete="off"
           />
@@ -271,12 +273,11 @@ function boardTable(
     <thead>
       <tr>
         <th>Status</th>
-        <th>Klient</th>
+        <th>Zlecenie</th>
         <th>Miejscowość / działka</th>
         <th>Bieżący krok</th>
         <th class="num">Dni na kroku</th>
         <th>Ostatnio</th>
-        <th class="num">Cena</th>
       </tr>
     </thead>
     <tbody>
@@ -287,7 +288,11 @@ function boardTable(
             onclick="location.href='${link(r.orderId)}'"
           >
             <td>${statusChip(r.urgency.colour, COLOUR_LABEL[r.urgency.colour])}</td>
-            <td><a href="${link(r.orderId)}">${r.clientName}</a><small>${r.workTypeName}</small></td>
+            <td>
+              <a href="${link(r.orderId)}">${orderLabel(r)}</a
+              ><small>${r.workTypeName}</small
+              >${r.orderNumber ? html`<span hidden>${r.clientName}</span>` : ''}
+            </td>
             <td>${r.town}${r.plot ? html`<small>dz. ${r.plot}</small>` : ''}</td>
             <td class="step-cell">
               ${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}
@@ -298,7 +303,6 @@ function boardTable(
               >${r.urgency.daysOverdue > 0 ? html`<small class="late">${r.urgency.daysOverdue} po terminie</small>` : ''}
             </td>
             <td>${personTag(r.lastPerson)}</td>
-            <td class="num">${formatPrice(r.pricePln)}</td>
           </tr>`,
       )}
     </tbody>
@@ -326,11 +330,12 @@ export function orderDetail(
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
     <div class="detail-head">
-      <h2>${order.clientName}</h2>
+      <h2>${orderLabel(order)}</h2>
       ${orderStatus(order, urgency)}
     </div>
     ${activeStep ? progressBar(activeStep.position, order.steps.length) : ''}
     <dl class="facts">
+      ${numberFact(order, people)}
       <dt>Telefon</dt>
       <dd><a href="tel:${order.phone}">${order.phone}</a></dd>
       <dt>Miejscowość</dt>
@@ -372,6 +377,34 @@ function orderStatus(order: Order, urgency: Urgency | null): SafeHtml {
   return statusChip(urgency.colour, `${COLOUR_LABEL[urgency.colour]}${late}`);
 }
 
+/** Wiersz „Nr zlecenia” na karcie: numer z biura (albo „brak”), formularz wpisania / zmiany (z historią i cofaniem) i klient. */
+function numberFact(order: Order, people: Person[]): SafeHtml {
+  const field = html`<input
+    class="number-input"
+    name="orderNumber"
+    aria-label="Numer zlecenia"
+    maxlength="${MAX_ORDER_NUMBER_LENGTH}"
+    placeholder="np. 125 podział"
+    value="${order.orderNumber ?? ''}"
+  />`;
+  const buttons = personButtons(`/zlecenia/${order.id}/numer`, 'Zapisz numer', people, 'secondary', field);
+  const summary = order.orderNumber ? 'Zmień numer zlecenia' : 'Wpisz numer zlecenia';
+  // Z numerem w tytule karty imię i nazwisko klienta pokazujemy w osobnym wierszu.
+  const client = order.orderNumber
+    ? html`<dt>Klient</dt>
+        <dd>${order.clientName}</dd>`
+    : '';
+  return html`<dt>Nr zlecenia</dt>
+    <dd>
+      ${order.orderNumber ?? html`<small>brak</small>`}
+      <details class="limit-change">
+        <summary>${summary}</summary>
+        ${buttons}
+      </details>
+    </dd>
+    ${client}`;
+}
+
 /**
  * Wiersz „Pomiar” na karcie: data (z przyciskiem kalendarza) albo wyraźne „Brak terminu”,
  * plus formularz wpisania / zmiany daty, dopóki zlecenie trwa.
@@ -411,7 +444,7 @@ function measurementForm(order: Order, people: Person[]): SafeHtml {
 function calendarButton(order: Order, workTypeName: string): SafeHtml {
   const place = order.plot ? `${order.town}, dz. ${order.plot}` : order.town;
   const link = googleCalendarLink({
-    title: `Pomiar: ${order.clientName}, ${order.town}`,
+    title: `Pomiar: ${orderLabel(order)}, ${order.town}`,
     date: order.measurementOn ?? '',
     location: place,
     details: [
@@ -614,6 +647,7 @@ const HISTORY_WORDS: Record<HistoryEntry['action'], (step: SafeHtml, note: SafeH
   lead_changed: (_step, note) => html`osoba prowadząca${note}`,
   step_assigned: (step, note) => html`osoba do kroku${step}${note}`,
   measurement_set: (_step, note) => html`data pomiaru${note}`,
+  number_set: (_step, note) => html`numer zlecenia${note}`,
 };
 
 export function historyText(h: HistoryEntry): SafeHtml {
@@ -638,6 +672,10 @@ export function orderForm(
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <form method="post" action="/zlecenia" class="order-form">
       ${v('offerId') ? html`<input type="hidden" name="offerId" value="${v('offerId')}" />` : ''}
+      <label
+        >Nr zlecenia <small>(opcjonalnie, np. „125 podział”; na tablicy widać go jako pierwszy)</small>
+        <input name="orderNumber" maxlength="${MAX_ORDER_NUMBER_LENGTH}" value="${v('orderNumber')}"
+      /></label>
       <label>Klient <input name="clientName" required value="${v('clientName')}" /></label>
       <label>Telefon <input name="phone" required inputmode="tel" value="${v('phone')}" /></label>
       <label>Miejscowość <input name="town" required value="${v('town')}" /></label>
@@ -836,7 +874,8 @@ main { padding:18px 22px; min-width:0; }
 .tile.offers .ti { background:#dbeafe; } .tile.unpaid .ti { background:#f3e8ff; }
 .tiles.six { grid-template-columns:repeat(6,minmax(0,1fr)); } .tile.no-date .ti { background:#ffedd5; }
 .missing-date { display:inline-flex; align-items:center; gap:5px; margin-top:4px; padding:3px 10px; border-radius:999px; background:#ffedd5; color:#9a3412; border:1px solid #fdba74; font-weight:700; font-size:14px; }
-.measurement-form { margin-top:8px; } .date-input { font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; margin-bottom:8px; }
+.measurement-form { margin-top:8px; } .number-input { width:100%; max-width:320px; box-sizing:border-box; }
+.date-input, .number-input { font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; margin-bottom:8px; }
 .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
 .toolbar input[type=search] { flex:1; max-width:420px; font:inherit; padding:9px 14px; border-radius:10px; border:1px solid #d1d5db; background:#fff; }
 .filter { padding:7px 14px; border-radius:999px; background:var(--ink); color:#fff; text-decoration:none; font-weight:600; font-size:15px; }

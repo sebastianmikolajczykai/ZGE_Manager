@@ -155,4 +155,22 @@ describe('OfferService', () => {
     expect(offers.urgencyOf('2026-11-20', '2026-12-01').colour).toBe('red');
     expect(tenDays.urgencyOf('2026-11-20', '2026-12-04').colour).toBe('red');
   });
+
+  describe('przypomnienie w Kalendarzu Google: dzień telefonu', () => {
+    it('is 7 working days after sending (Friday 20.11 → Tuesday 1.12)', () => {
+      const id = offers.create(input(), PERSON);
+      expect(offers.callDueOn(id)).toBe('2026-12-01');
+    });
+
+    it('counts from the last call, and is today when the call is already late', () => {
+      const id = offers.create(input({ sentOn: '2026-11-02' }), PERSON);
+      expect(offers.callDueOn(id)).toBe(today);
+      offers.recordCall(id, PERSON, null, 'again');
+      expect(offers.callDueOn(id)).toBe('2026-12-01');
+    });
+
+    it('rejects an unknown offer', () => {
+      expect(() => offers.callDueOn(999)).toThrow(/999/);
+    });
+  });
 });
