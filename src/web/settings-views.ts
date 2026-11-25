@@ -20,6 +20,7 @@ import type { DaysOff } from '../modules/settings/days-off-repository.js';
 import type { WorkType } from '../modules/work-types/work-type-repository.js';
 import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin.js';
 import { workTypesSection } from './work-type-views.js';
+import { appearanceChoice } from './theme.js';
 import { messageSettingsSection, type MessageSettingsView } from './message-views.js';
 import { calendarSection } from './calendar-sync-views.js';
 import type { SyncStatus } from '../modules/calendar-sync/calendar-sync-service.js';
@@ -44,7 +45,12 @@ export interface SettingsView {
   workTypeHistory: WorkTypeHistoryEntry[];
   message: MessageSettingsView;
   calendar: SyncStatus;
+  /** Sekcja rozwinięta od razu (po zapisie albo przy błędzie), żeby było widać wynik. */
+  openSection?: SettingsSectionId;
 }
+
+/** Sekcje Ustawień; id = kotwica w adresie (np. /ustawienia#osoby) i w menu u góry. */
+export type SettingsSectionId = 'kolory' | 'rodzaje-prac' | 'dni-wolne' | 'wiadomosc' | 'kalendarz' | 'osoby';
 
 /** Ustawienia jako wartości pól formularza (przełącznik: '1' = włączony, brak = wyłączony). */
 export function settingsFormValues(settings: AppSettings): Record<string, string> {
@@ -61,6 +67,7 @@ export function settingsFormValues(settings: AppSettings): Record<string, string
 }
 
 export function settingsPage(people: Person[], view: SettingsView, error: string | null): SafeHtml {
+  const open = view.openSection;
   return html`<section class="form-page">
     <h2>Ustawienia</h2>
     <nav class="settings-nav" aria-label="Sekcje ustawień">
@@ -68,20 +75,64 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
       ><a href="#dni-wolne">🏖 Dni wolne</a><a href="#wiadomosc">✉️ Wiadomość SMS</a
       ><a href="#kalendarz">📅 Kalendarz Google</a><a href="#osoby">👥 Osoby</a>
     </nav>
-    ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
-    <h3 id="kolory">Kolory i przypomnienia</h3>
-    <p><small>Liczymy tylko dni robocze (pn–pt) bez świąt. Zmiany działają od razu po zapisaniu.</small></p>
+    ${appearanceChoice()} ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
+    <p class="settings-hint"><small>Kliknij nazwę sekcji, żeby ją rozwinąć albo zwinąć.</small></p>
+    ${section('kolory', 'Kolory i przypomnienia', null, coloursSection(people, view), open)}
+    ${section(
+      'rodzaje-prac',
+      'Rodzaje prac',
+      view.workTypes.length,
+      workTypesSection(view.workTypes, view.workTypeHistory),
+      open,
+    )}
+    ${section('dni-wolne', 'Dni wolne firmy', view.daysOff.length, daysOffSection(view.daysOff, people), open)}
+    ${section('wiadomosc', 'Wiadomość do klienta (SMS)', null, messageSettingsSection(view.message, people), open)}
+    ${section(
+      'kalendarz',
+      'Kalendarz Google (przypomnienia „Zadzwoń”)',
+      null,
+      calendarSection(view.calendar, people),
+      open,
+    )}
+    ${section('osoby', 'Osoby (przyciski „kto zrobił”)', people.length, peopleSection(people), open)}
+  </section>`;
+}
+
+/** Jedna zwijana sekcja; przeglądarka pamięta, czy była rozwinięta (data-fold). */
+function section(
+  id: SettingsSectionId,
+  title: string,
+  count: number | null,
+  body: SafeHtml,
+  open: SettingsSectionId | undefined,
+): SafeHtml {
+  const countHtml = count === null ? '' : html` <small class="count">(${count})</small>`;
+  return html`<details
+    class="fold settings-section"
+    id="${id}"
+    data-fold="ustawienia-${id}"
+    ${open === id ? 'open' : ''}
+  >
+    <summary><h3>${title}${countHtml}</h3></summary>
+    <div class="section-body">${body}</div>
+  </details>`;
+}
+
+function coloursSection(people: Person[], view: SettingsView): SafeHtml {
+  return html`<p>
+      <small>Liczymy tylko dni robocze (pn–pt) bez świąt. Zmiany działają od razu po zapisaniu.</small>
+    </p>
     ${savedNote(view.saved)} ${thresholdsForm(people, view)}
     <details class="undo">
       <summary class="button undo-toggle"><span aria-hidden="true">↺</span> Przywróć domyślne</summary>
       <p><small>${defaultsSummary()}</small></p>
       ${personButtons('/ustawienia/progi/domyslne', 'Przywróć domyślne', people, 'danger')}
     </details>
-    ${fold('settings-history', `Historia zmian ustawień (${view.history.length})`, historyList(view.history))}
-    ${workTypesSection(view.workTypes, view.workTypeHistory)} ${daysOffSection(view.daysOff, people)}
-    ${messageSettingsSection(view.message, people)} ${calendarSection(view.calendar, people)}
-    <h3 id="osoby">Osoby (przyciski „kto zrobił”)</h3>
-    <ul class="people-list">
+    ${fold('settings-history', `Historia zmian ustawień (${view.history.length})`, historyList(view.history))}`;
+}
+
+function peopleSection(people: Person[]): SafeHtml {
+  return html`<ul class="people-list">
       ${people.map(
         (p) =>
           html`<li>
@@ -94,8 +145,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     </ul>
     <form method="post" action="/ustawienia/osoby" class="inline">
       <label>Imię <input name="name" required /></label><button class="primary">Dodaj osobę</button>
-    </form>
-  </section>`;
+    </form>`;
 }
 
 function daysOffSection(daysOff: DaysOff[], people: Person[]): SafeHtml {
@@ -106,8 +156,7 @@ function daysOffSection(daysOff: DaysOff[], people: Person[]): SafeHtml {
     ><label class="setting"
       ><span>Powód</span><small>opcjonalnie, np. urlop</small><input name="note" class="text"
     /></label>`;
-  return html`<h3 id="dni-wolne">Dni wolne firmy</h3>
-    <p><small>Urlop, długi weekend: te dni nie liczą się do limitów, tak jak święta.</small></p>
+  return html`<p><small>Urlop, długi weekend: te dni nie liczą się do limitów, tak jak święta.</small></p>
     ${
       daysOff.length === 0
         ? html`<p><small>Brak zaplanowanych dni wolnych.</small></p>`

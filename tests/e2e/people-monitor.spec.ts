@@ -68,7 +68,7 @@ test('widok na monitor: duże kafle, zegar, link z menu', async ({ page, context
 });
 
 test('przyciski − / + zmieniają liczbę w Ustawieniach (w granicach), zapis jak zwykle', async ({ page }) => {
-  await page.goto('/ustawienia');
+  await page.goto('/ustawienia#kolory');
   const field = page.getByRole('spinbutton', { name: 'Przypomnienie o ofercie po' });
   const before = Number(await field.inputValue());
   await page.getByRole('button', { name: 'Zwiększ: Przypomnienie o ofercie po' }).click();

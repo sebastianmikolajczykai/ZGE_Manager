@@ -733,6 +733,19 @@ document.querySelectorAll('details[data-fold]').forEach(function (d) {
     try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch (e) {}
   });
 });
+// Ustawienia: adres z #sekcja (menu u góry, powrót po zapisie) rozwija tę zwiniętą sekcję.
+function openSectionFromHash() {
+  var target = location.hash && document.getElementById(location.hash.slice(1));
+  if (target && target.tagName === 'DETAILS') target.open = true;
+}
+openSectionFromHash();
+window.addEventListener('hashchange', openSectionFromHash);
+document.querySelectorAll('.settings-nav a').forEach(function (a) {
+  a.addEventListener('click', function () {
+    var target = document.getElementById(a.getAttribute('href').slice(1));
+    if (target) target.open = true;
+  });
+});
 // Podświetlenie bieżącej zakładki w menu bocznym.
 document.querySelectorAll('.side nav a:not(.add)').forEach(function (a) {
   var href = a.getAttribute('href');
@@ -944,6 +957,11 @@ details.fold > summary:hover { color:var(--brand); }
 .undo { margin:12px 0; } .undo-toggle { display:inline-block; border-radius:10px; font-weight:600; list-style:none; cursor:pointer; background:#fff; color:var(--red-ink); border:2px solid var(--red-ink); font-size:16px; padding:9px 16px; user-select:none; }
 .undo-toggle:hover, .undo[open] > .undo-toggle { background:var(--red); } .undo[open] > form { margin-top:8px; }
 /* Ustawienia: etykieta z podpowiedzią po lewej, pole po prawej. */
+details.settings-section { margin:0; border-top:1px solid var(--line); }
+details.settings-section > summary { display:flex; align-items:center; padding:14px 0; scroll-margin-top:12px; }
+details.settings-section > summary::before { flex:none; }
+details.settings-section > summary h3 { margin:0; padding:0; border:0; font-size:20px; } details.settings-section > summary h3 .count { color:var(--muted); font-weight:600; }
+details.settings-section > .section-body { padding:0 0 16px; } .settings-hint { margin:6px 0 4px; color:var(--muted); }
 .settings-nav { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 6px; } .settings-nav a { padding:7px 14px; border-radius:999px; background:var(--green); color:var(--green-ink); text-decoration:none; font-weight:600; font-size:15px; }
 .form-page h3 { font-size:19px; margin:26px 0 6px; padding-top:14px; border-top:1px solid var(--line); scroll-margin-top:12px; }
 form.people > label.setting { display:grid; grid-template-columns:minmax(0,1fr) 190px; align-items:center; gap:2px 12px; padding:10px 0; border-bottom:1px solid var(--line); font-weight:600; }

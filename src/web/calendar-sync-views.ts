@@ -21,8 +21,7 @@ const TIME = new Intl.DateTimeFormat('pl-PL', {
 
 /** Ustawienia → Kalendarz Google. */
 export function calendarSection(status: SyncStatus, people: Person[]): SafeHtml {
-  return html`<h3 id="kalendarz">Kalendarz Google (przypomnienia „Zadzwoń”)</h3>
-    <p>
+  return html` <p>
       <small
         >Gdy synchronizacja jest włączona, przypomnienia o telefonie do klienta (oferty po terminie,
         niezapłacone zlecenia) same pojawiają się w osobnym kalendarzu „ZGE przypomnienia” na koncie Google.

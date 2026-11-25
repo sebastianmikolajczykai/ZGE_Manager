@@ -70,7 +70,10 @@ export function registerWorkTypeRoutes(
     '/ustawienia/prace/:id/pokaz',
     (w, p) => (s.workTypeAdmin.setHidden(w.id, false, p), `/ustawienia/prace/${w.id}`),
   );
-  action('/ustawienia/prace/:id/usun', (w, p) => (s.workTypeAdmin.remove(w.id, p), '/ustawienia'));
+  action(
+    '/ustawienia/prace/:id/usun',
+    (w, p) => (s.workTypeAdmin.remove(w.id, p), '/ustawienia#rodzaje-prac'),
+  );
 }
 
 /** „Zapisz: osoba” zapisuje; inne przyciski (↑ ↓ ✕ + krok) zmieniają tylko wersję roboczą. */
@@ -108,7 +111,7 @@ function find(s: WorkTypeWebServices, params: unknown): WorkType | null {
 function notFound(reply: FastifyReply, s: WorkTypeWebServices) {
   const page = html`<section class="form-page">
     <p class="error" role="alert">Nie ma takiego rodzaju pracy.</p>
-    <p><a href="/ustawienia">← Ustawienia</a></p>
+    <p><a href="/ustawienia#rodzaje-prac">← Ustawienia</a></p>
   </section>`;
   return s.pages.send(reply, 'Nie znaleziono', page, HTTP_NOT_FOUND);
 }

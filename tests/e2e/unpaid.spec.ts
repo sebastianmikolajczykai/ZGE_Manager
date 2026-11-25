@@ -6,7 +6,7 @@ test('niezapłacone: po oddaniu klientowi zlecenie przechodzi do zakładki, SMS 
   context,
 }) => {
   const client = `Zapłata E2E ${Date.now()}`;
-  await page.goto('/ustawienia');
+  await page.goto('/ustawienia#wiadomosc');
   await page.getByLabel('Numer konta').fill('66105014451000009030216767');
   await page.getByRole('button', { name: 'Zapisz dane SMS: Łukasz' }).click();
   await expect(page.getByLabel('Numer konta')).toHaveValue('66 1050 1445 1000 0090 3021 6767');
