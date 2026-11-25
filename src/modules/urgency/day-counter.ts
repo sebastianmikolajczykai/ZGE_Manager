@@ -47,6 +47,13 @@ export class DayCounter {
     return toIsoDate(day);
   }
 
+  /** Ten sam dzień, jeśli jest roboczy, w przeciwnym razie najbliższy następny dzień roboczy. */
+  workingDayOnOrAfter(date: LocalDate): LocalDate {
+    let day = toEpochDay(date);
+    while (this.mode === 'working' && !this.isWorkingEpochDay(day)) day++;
+    return toIsoDate(day);
+  }
+
   private isWorkingEpochDay(epochDay: number): boolean {
     if (!isWeekday(epochDay)) return false;
     const date = toIsoDate(epochDay);

@@ -74,3 +74,15 @@ test('ustawienia: wyjście ze strony z niezapisanymi zmianami pyta, czy je porzu
   expect(await asked).toBe('beforeunload');
   await expect(page).toHaveURL(/\/oferty/);
 });
+
+test('ustawienia: sekcja Kalendarz Google bez kluczy w .env wyjaśnia, co zrobić, a program działa', async ({
+  page,
+}) => {
+  await page.goto('/ustawienia');
+  await page.getByRole('link', { name: '📅 Kalendarz Google' }).click();
+  await expect(page.getByRole('heading', { name: /Kalendarz Google/ })).toBeVisible();
+  await expect(page.getByText(/Brak kluczy Google w pliku \.env/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Połącz z Kalendarzem Google/ })).toHaveCount(0);
+  await page.goto('/');
+  await expect(page.locator('.calendar-banner')).toHaveCount(0);
+});

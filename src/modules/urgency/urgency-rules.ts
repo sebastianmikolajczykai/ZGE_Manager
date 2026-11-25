@@ -82,6 +82,16 @@ export class UrgencyRules {
     return this.snapshot().counter.daysBetween(from, to);
   }
 
+  /** Termin po `days` dniach (robocze, bez świąt i dni wolnych firmy) – do przypomnień w kalendarzu. */
+  addDays(from: LocalDate, days: number): LocalDate {
+    return this.snapshot().counter.dateAfter(from, days);
+  }
+
+  /** Dziś, jeśli to dzień roboczy, inaczej najbliższy dzień roboczy. */
+  workingDayOnOrAfter(date: LocalDate): LocalDate {
+    return this.snapshot().counter.workingDayOnOrAfter(date);
+  }
+
   /**
    * Kiedy zadzwonić: dzień, w którym od ostatniego kontaktu minie limit (sprawa robi się wtedy czerwona).
    * Nigdy wcześniej niż dziś; bez limitu = dziś. Do przypomnień w Kalendarzu Google.

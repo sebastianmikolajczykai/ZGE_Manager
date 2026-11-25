@@ -17,6 +17,8 @@ export interface UnpaidRow {
   /** Oddanie albo ostatnia rozmowa o zapłacie (od tego dnia liczy się limit). */
   lastContactOn: LocalDate;
   daysSinceContact: number;
+  /** Limit dni kroku „Zapłata” (null = bez limitu); od niego liczy się termin przypomnienia. */
+  limitDays: number | null;
   lastPerson: string | null;
   urgency: Urgency;
   /** Kiedy zadzwonić o zapłatę (do przypomnienia w Kalendarzu Google): koniec limitu, najwcześniej dziś. */
@@ -124,6 +126,7 @@ export class PaymentService {
       handedOverOn: step.startedOn ?? today,
       lastContactOn,
       daysSinceContact: this.rules.daysBetween(lastContactOn, today),
+      limitDays: step.limitDays,
       lastPerson: this.lastPerson(order.id),
       urgency: this.urgencyOf(step, today),
       remindOn: this.rules.dueOn(lastContactOn, step.limitDays, today),

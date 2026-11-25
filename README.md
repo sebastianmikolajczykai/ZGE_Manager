@@ -6,6 +6,7 @@
 
 Aplikacja działa na komputerze firmy i otwiera się w przeglądarce pod `http://localhost:3000`.
 Dane są w jednym pliku SQLite (`dane/zge.db`), serwer nasłuchuje tylko na `127.0.0.1`, więc nic nie wychodzi do internetu.
+Wyjątek to opcjonalna synchronizacja z Kalendarzem Google (domyślnie wyłączona, opis niżej): do Google trafia wtedy tylko numer oferty lub zlecenia, data i link do aplikacji.
 
 ## Instalacja na laptopie (Windows), bez wpisywania poleceń
 
@@ -42,6 +43,38 @@ Domyślnie kopie trafiają do `dane\kopie`, czyli na ten sam dysk. Żeby przetrw
 3. Zapisz, kliknij `Zatrzymaj ZGE.bat`, potem `Uruchom ZGE.bat`.
 
 **Przywrócenie kopii:** kliknij `Zatrzymaj ZGE.bat`, przenieś gdzieś obecne pliki `dane\zge.db`, `dane\zge.db-wal` i `dane\zge.db-shm` (na wszelki wypadek), skopiuj wybraną kopię do folderu `dane` i zmień jej nazwę na `zge.db`, potem kliknij `Uruchom ZGE.bat`.
+
+## Kalendarz Google (przypomnienia „Zadzwoń”)
+
+Gdy synchronizacja jest włączona, aplikacja sama zakłada w Google osobny kalendarz **„ZGE przypomnienia”** i wpisuje do niego całodniowe wydarzenia:
+
+- „Zadzwoń: oferta nr 12”: w dniu, w którym mija termin telefonu w sprawie oferty (domyślnie 7 dni roboczych od wysłania albo od ostatniego telefonu),
+- „Zadzwoń: zapłata, zlecenie nr 34”: w dniu, w którym mija limit kroku „Zapłata”.
+
+Po odznaczeniu w aplikacji (telefon z „przypomnij znów”, kontakt zakończony, odrzucona, przyjęta, zapłacone) wydarzenie znika albo przesuwa się na nowy termin. Gdy termin minął, a nikt nic nie odznaczył, wydarzenie przechodzi na dziś (albo najbliższy dzień roboczy), więc ciągle jest widoczne. Aplikacja sprawdza kalendarz po starcie, co 5 minut i chwilę po każdym kliknięciu.
+
+**Prywatność:** do Google trafia tylko numer, data i link do karty w aplikacji (link działa tylko na komputerze w biurze). Bez imienia i nazwiska, telefonu i kwoty. Aplikacja ma uprawnienie `calendar.app.created`: widzi tylko kalendarze, które sama założyła, a nie prywatne wydarzenia właściciela konta.
+
+**Bez internetu albo po wygaśnięciu połączenia** program działa normalnie, a na górze ekranu pojawia się czerwony pasek z wyjaśnieniem. Po powrocie internetu kalendarz zaktualizuje się sam.
+
+### Jednorazowa konfiguracja (konto Gmail)
+
+W Google Cloud (https://console.cloud.google.com), zalogowany na konto Google, którego kalendarz ma dostawać przypomnienia:
+
+1. Utwórz nowy projekt, np. „ZGE Menedżer”.
+2. **Interfejsy API i usługi → Biblioteka:** wyszukaj „Google Calendar API” i kliknij **Włącz**.
+3. **Ekran zgody OAuth** (w nowszym wyglądzie: „Google Auth Platform”): nazwa aplikacji „ZGE Menedżer”, e-mail pomocy, odbiorcy **Zewnętrzni (External)**, e-mail kontaktowy.
+4. Na liście uprawnień (Data Access / Zakresy) dodaj `https://www.googleapis.com/auth/calendar.app.created`.
+5. **Odbiorcy (Audience): Opublikuj aplikację → „W wersji produkcyjnej” (In production).** Ważne: w trybie „Testowanie” Google unieważnia połączenie co 7 dni. Weryfikacja przez Google nie jest potrzebna; przy logowaniu pojawi się tylko ostrzeżenie „Aplikacja niezweryfikowana”.
+6. **Klienci (Clients) → Utwórz klienta → typ aplikacji „Aplikacja komputerowa” (Desktop app).** Skopiuj **Identyfikator klienta** i **Tajny klucz klienta**.
+
+Na komputerze w biurze:
+
+7. W pliku `.env` (kopia `.env.example`) wpisz `GOOGLE_CLIENT_ID=...` i `GOOGLE_CLIENT_SECRET=...`, zapisz, kliknij `Zatrzymaj ZGE.bat`, potem `Uruchom ZGE.bat`. Klucze są tylko w tym pliku, nigdy w repozytorium.
+8. W aplikacji: **Ustawienia → Kalendarz Google → „Połącz z Kalendarzem Google: (imię)”**. Zaloguj się w Google. Przy ostrzeżeniu „Google nie zweryfikował tej aplikacji” kliknij **Zaawansowane → Przejdź do ZGE Menedżer** i zezwól na dostęp. Logowanie musi być zrobione w przeglądarce na tym samym komputerze, na którym działa aplikacja.
+9. Kliknij **„Włącz synchronizację: (imię)”**. W Kalendarzu Google pojawi się kalendarz „ZGE przypomnienia”. Można go udostępnić innym osobom w ustawieniach Kalendarza Google.
+
+Token połączenia zapisuje się w `dane\google-token.json`. **Odłącz konto Google** w Ustawieniach usuwa ten plik i cofa dostęp w Google. **Wyłącz synchronizację** usuwa z kalendarza wydarzenia założone przez aplikację.
 
 ## Uruchomienie dla programisty
 

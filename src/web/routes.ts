@@ -37,6 +37,8 @@ import { nearLimitNotice } from '../modules/settings/settings-validation.js';
 import type { DaysOffRepository } from '../modules/settings/days-off-repository.js';
 import type { WorkTypeAdmin } from '../modules/work-types/work-type-admin.js';
 import { registerWorkTypeRoutes } from './work-type-routes.js';
+import { registerCalendarRoutes, type CalendarAccount } from './calendar-routes.js';
+import type { CalendarSyncService } from '../modules/calendar-sync/calendar-sync-service.js';
 
 export interface WebServices {
   orders: OrderService;
@@ -52,6 +54,8 @@ export interface WebServices {
   daysOff: DaysOffRepository;
   workTypeAdmin: WorkTypeAdmin;
   pages: PageRenderer;
+  calendarSync: CalendarSyncService;
+  calendarAccount: CalendarAccount | null;
 }
 
 /** Ekrany aplikacji: tablica z kartą zlecenia, formularz nowego zlecenia, ustawienia. */
@@ -191,6 +195,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   });
 
   registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error));
+  registerCalendarRoutes(app, s, (reply, error) => renderSettings(reply, s, error));
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
 
@@ -231,6 +236,7 @@ function renderSettings(
     workTypes,
     workTypeHistory: s.workTypeAdmin.history(),
     message: { values: extras.typedMessage ?? { ...s.messages.get() }, history: s.messages.history() },
+    calendar: s.calendarSync.status(),
   };
   return s.pages.send(
     reply,

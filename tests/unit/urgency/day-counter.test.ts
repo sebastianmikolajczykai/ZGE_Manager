@@ -139,3 +139,17 @@ describe('DayCounter.dateAfter: dzień, w którym minie N dni (do przypomnień w
     expect(() => working.dateAfter('2026-11-20', -1)).toThrow(/dni/);
   });
 });
+
+describe('DayCounter.workingDayOnOrAfter (przeterminowane przypomnienie)', () => {
+  const working = new DayCounter('working');
+
+  it('next working day on or after: Saturday → Monday, Monday stays', () => {
+    expect(working.workingDayOnOrAfter('2026-11-21')).toBe('2026-11-23');
+    expect(working.workingDayOnOrAfter('2026-11-23')).toBe('2026-11-23');
+  });
+
+  it('respects company days off', () => {
+    const withDayOff = new DayCounter('working', undefined, (d) => d === '2026-11-23');
+    expect(withDayOff.workingDayOnOrAfter('2026-11-21')).toBe('2026-11-24');
+  });
+});

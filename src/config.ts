@@ -12,6 +12,15 @@ export interface Config {
   backupDir: string;
   /** Ile najnowszych kopii trzymać; starsze są usuwane. */
   backupKeep: number;
+  /** Klucze aplikacji z Google Cloud (klient OAuth „Desktop app”); null = synchronizacja z kalendarzem niemożliwa. */
+  google: GoogleClientConfig | null;
+  /** Plik z tokenem konta Google po połączeniu (poza repozytorium). */
+  googleTokenFile: string;
+}
+
+export interface GoogleClientConfig {
+  clientId: string;
+  clientSecret: string;
 }
 
 /** Domyślnie: dane w pliku dane/zge.db obok aplikacji, serwer widoczny tylko z tego komputera. */
@@ -23,7 +32,16 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     demo: env.ZGE_DEMO === '1',
     backupDir: path.resolve(env.BACKUP_DIR ?? 'dane/kopie'),
     backupKeep: positiveInteger('BACKUP_KEEP', env.BACKUP_KEEP, DEFAULT_BACKUP_KEEP),
+    google: googleClient(env),
+    googleTokenFile: path.resolve(env.GOOGLE_TOKEN_FILE ?? 'dane/google-token.json'),
   };
+}
+
+/** Klucze Google tylko ze zmiennych środowiskowych (plik .env), nigdy z kodu. Oba muszą być wpisane. */
+function googleClient(env: Record<string, string | undefined>): GoogleClientConfig | null {
+  const clientId = env.GOOGLE_CLIENT_ID?.trim() ?? '';
+  const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim() ?? '';
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
 function positiveInteger(name: string, raw: string | undefined, fallback: number): number {
