@@ -10,6 +10,10 @@ describe('loadConfig', () => {
       port: 4000,
       host: '127.0.0.1',
       demo: false,
+      backupDir: path.resolve('dane/kopie'),
+      backupKeep: 30,
+      google: null,
+      googleTokenFile: path.resolve('dane/google-token.json'),
     });
   });
 
@@ -26,7 +30,28 @@ describe('loadConfig', () => {
     expect(loadConfig({}).demo).toBe(false);
   });
 
+  it('reads the daily backup folder and the number of copies to keep', () => {
+    const cfg = loadConfig({ BACKUP_DIR: '/OneDrive/ZGE kopie', BACKUP_KEEP: '14' });
+    expect(cfg.backupDir).toBe(path.resolve('/OneDrive/ZGE kopie'));
+    expect(cfg.backupKeep).toBe(14);
+  });
+
+  it('rejects a number of backup copies that is not a positive whole number', () => {
+    expect(() => loadConfig({ BACKUP_KEEP: '0' })).toThrow(/BACKUP_KEEP/);
+    expect(() => loadConfig({ BACKUP_KEEP: 'dużo' })).toThrow(/BACKUP_KEEP/);
+  });
+
   it('rejects a non-numeric PORT', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/);
+  });
+
+  it('Google keys come only from env (both needed), token file in dane/ by default', () => {
+    expect(loadConfig({ GOOGLE_CLIENT_ID: 'id' }).google).toBeNull();
+    expect(loadConfig({ GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 's' }).google).toEqual({
+      clientId: 'id',
+      clientSecret: 's',
+    });
+    expect(loadConfig({ GOOGLE_CLIENT_ID: ' ', GOOGLE_CLIENT_SECRET: 's' }).google).toBeNull();
+    expect(loadConfig({ GOOGLE_TOKEN_FILE: '/x/t.json' }).googleTokenFile).toBe(path.resolve('/x/t.json'));
   });
 });

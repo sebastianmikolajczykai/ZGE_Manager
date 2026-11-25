@@ -110,3 +110,46 @@ describe('DayCounter: company days off (Ustawienia → Dni wolne firmy)', () => 
     expect(new DayCounter('calendar', undefined, dayOff).daysBetween('2026-11-16', '2026-11-18')).toBe(2);
   });
 });
+
+describe('DayCounter.dateAfter: dzień, w którym minie N dni (do przypomnień w kalendarzu)', () => {
+  const working = new DayCounter('working');
+
+  it('skips the weekend in working mode (Friday + 1 = Monday)', () => {
+    expect(working.dateAfter('2026-11-20', 1)).toBe('2026-11-23');
+  });
+
+  it('counts 7 working days like the offer reminder (Tuesday 24.11 → Thursday 3.12)', () => {
+    expect(working.dateAfter('2026-11-24', 7)).toBe('2026-12-03');
+    expect(working.daysBetween('2026-11-24', '2026-12-03')).toBe(7);
+  });
+
+  it('skips holidays and company days off', () => {
+    // 11.11 (Święto Niepodległości) wypada w środę
+    expect(working.dateAfter('2026-11-10', 1)).toBe('2026-11-12');
+    const withDayOff = new DayCounter('working', undefined, (d) => d === '2026-11-25');
+    expect(withDayOff.dateAfter('2026-11-24', 1)).toBe('2026-11-26');
+  });
+
+  it('counts every day in calendar mode and returns the same day for 0', () => {
+    expect(new DayCounter('calendar').dateAfter('2026-11-20', 3)).toBe('2026-11-23');
+    expect(working.dateAfter('2026-11-21', 0)).toBe('2026-11-21');
+  });
+
+  it('rejects a negative number of days', () => {
+    expect(() => working.dateAfter('2026-11-20', -1)).toThrow(/dni/);
+  });
+});
+
+describe('DayCounter.workingDayOnOrAfter (przeterminowane przypomnienie)', () => {
+  const working = new DayCounter('working');
+
+  it('next working day on or after: Saturday → Monday, Monday stays', () => {
+    expect(working.workingDayOnOrAfter('2026-11-21')).toBe('2026-11-23');
+    expect(working.workingDayOnOrAfter('2026-11-23')).toBe('2026-11-23');
+  });
+
+  it('respects company days off', () => {
+    const withDayOff = new DayCounter('working', undefined, (d) => d === '2026-11-23');
+    expect(withDayOff.workingDayOnOrAfter('2026-11-21')).toBe('2026-11-24');
+  });
+});

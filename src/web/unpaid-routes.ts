@@ -25,6 +25,8 @@ export interface UnpaidWebServices {
   people: PeopleRepository;
   today: () => LocalDate;
   pages: PageRenderer;
+  /** Automatyczna synchronizacja z Kalendarzem Google: gdy włączona, ręczny przycisk „Dodaj przypomnienie” znika. */
+  calendarSync?: { status(): { enabled: boolean } };
 }
 
 const TITLE = 'Niezapłacone';
@@ -98,6 +100,7 @@ function renderUnpaid(
       s.people.list(),
       s.orders.undoableEntryIds(orderId),
       paymentMessageBox(paymentText(s, s.orders.get(orderId)), row.phone),
+      !s.calendarSync?.status().enabled, // przy włączonej synchronizacji bez ręcznego przycisku
     );
   }
   return s.pages.send(

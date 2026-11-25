@@ -19,6 +19,7 @@ function step(position: number, status: OrderStep['status']): OrderStep {
     lastCheckedOn: null,
     lastCheckedBy: null,
     assignee: null,
+    parallel: false,
   };
 }
 
@@ -38,6 +39,7 @@ function order(steps: OrderStep[]): Order {
     status: 'active',
     completedOn: null,
     leadPerson: null,
+    orderNumber: null,
     steps,
   };
 }
@@ -328,5 +330,119 @@ describe('karta zlecenia: osoba prowadząca i osoby kroków', () => {
     const page = orderDetail(order([step(1, 'active')]), 'Podział', null, entries, PEOPLE).value;
     expect(page).toContain('Bartek: osoba prowadząca (brak → Marcelina)');
     expect(page).toContain('Bartek: osoba do kroku „Krok 2” (brak → Bartek)');
+  });
+});
+
+describe('karta zlecenia: numer zlecenia', () => {
+  const numbered = (orderNumber: string | null, extra: Partial<Order> = {}): string =>
+    orderDetail(
+      { ...order([step(1, 'active')]), orderNumber, pricePln: 2500, ...extra },
+      'Podział',
+      null,
+      HISTORY,
+      PEOPLE,
+    ).value;
+
+  it('shows the number as the card title and the client name below it', () => {
+    const page = numbered('125 podział');
+    expect(page).toMatch(/<h2>125 podział<\/h2>/);
+    expect(page).toMatch(/<dt>Klient<\/dt>\s*<dd>Klient \(przykład\)<\/dd>/);
+  });
+
+  it('keeps the old look for an order without a number (client name as the title)', () => {
+    const page = numbered(null);
+    expect(page).toMatch(/<h2>Klient \(przykład\)<\/h2>/);
+    expect(page).not.toContain('<dt>Klient</dt>');
+  });
+
+  it('shows the price only here, on the opened card', () => {
+    expect(numbered('125')).toContain('2500 zł');
+  });
+
+  it('lets you type the number later on an order without one', () => {
+    const page = numbered(null);
+    expect(page).toContain('action="/zlecenia/7/numer"');
+    expect(page).toMatch(/name="orderNumber"[^>]*value=""/);
+    expect(page).toContain('Wpisz numer zlecenia');
+    expect(page).toContain('Zapisz numer: Bartek');
+  });
+
+  it('lets you change an existing number (folded away)', () => {
+    const page = numbered('125');
+    expect(page).toContain('Zmień numer zlecenia');
+    expect(page).toMatch(/name="orderNumber"[^>]*value="125"/);
+  });
+
+  it('describes a number change in the history', () => {
+    const entry: HistoryEntry = {
+      id: 3,
+      reverted: false,
+      happenedOn: '2026-11-24',
+      person: 'Bartek',
+      action: 'number_set',
+      stepPosition: null,
+      stepName: null,
+      note: 'brak → 125 podział',
+    };
+    const page = orderDetail(order([step(1, 'active')]), 'Podział', null, [entry], PEOPLE).value;
+    expect(page).toContain('Bartek: numer zlecenia (brak → 125 podział)');
+  });
+
+  it('uses the number instead of the client name in the measurement calendar event', () => {
+    const page = numbered('125 podział', { measurementOn: '2026-11-30' });
+    const href = page.match(/href="(https:\/\/calendar\.google\.com[^"]*)"/)?.[1] ?? '';
+    const url = new URL(href.replaceAll('&amp;', '&'));
+    expect(url.searchParams.get('text')).toBe('Pomiar: 125 podział, Brzesko');
+  });
+});
+
+describe('karta zlecenia: kroki równoległe', () => {
+  const parallel = (s: OrderStep): OrderStep => ({ ...s, parallel: true });
+  const steps = [step(1, 'active'), parallel(step(2, 'active')), step(3, 'pending')];
+  const colours = new Map([
+    [1, { colour: 'red' as const, daysOverdue: 2, blink: false }],
+    [2, { colour: 'green' as const, daysOverdue: 0, blink: false }],
+  ]);
+  const page = orderDetail(
+    order(steps),
+    'Podział',
+    colours.get(1) ?? null,
+    HISTORY,
+    PEOPLE,
+    [],
+    null,
+    colours,
+  ).value;
+  const item = (position: number) => {
+    const start = page.indexOf(`<li value="${position}"`);
+    return page.slice(start, page.indexOf('</li>', start));
+  };
+
+  it('shows two separate "Zrobione" buttons, one for each running step', () => {
+    expect(item(1)).toContain('/zlecenia/7/kroki/1/zrobione');
+    expect(item(2)).toContain('/zlecenia/7/kroki/2/zrobione');
+  });
+
+  it('each running step shows its own colour and lateness', () => {
+    expect(item(1)).toContain('chip-red');
+    expect(item(1)).toContain('2 dni po terminie');
+    expect(item(2)).toContain('chip-green');
+    expect(item(2)).not.toContain('po terminie');
+  });
+
+  it('marks the steps as running at the same time', () => {
+    expect(item(1)).toContain('równolegle');
+    expect(item(2)).toContain('równolegle');
+  });
+
+  it('a single running step looks as before (no extra colour chip, no "równolegle")', () => {
+    const single = orderDetail(
+      order([step(1, 'active'), step(2, 'pending')]),
+      'Podział',
+      null,
+      HISTORY,
+      PEOPLE,
+    ).value;
+    expect(single).not.toContain('równolegle');
   });
 });

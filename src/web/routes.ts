@@ -42,6 +42,8 @@ import { nearLimitNotice } from '../modules/settings/settings-validation.js';
 import type { DaysOffRepository } from '../modules/settings/days-off-repository.js';
 import type { WorkTypeAdmin } from '../modules/work-types/work-type-admin.js';
 import { registerWorkTypeRoutes } from './work-type-routes.js';
+import { registerCalendarRoutes, type CalendarAccount } from './calendar-routes.js';
+import type { CalendarSyncService } from '../modules/calendar-sync/calendar-sync-service.js';
 
 export interface WebServices {
   orders: OrderService;
@@ -57,6 +59,8 @@ export interface WebServices {
   daysOff: DaysOffRepository;
   workTypeAdmin: WorkTypeAdmin;
   pages: PageRenderer;
+  calendarSync: CalendarSyncService;
+  calendarAccount: CalendarAccount | null;
 }
 
 /** Ekrany aplikacji: tablica z kartą zlecenia, formularz nowego zlecenia, ustawienia. */
@@ -123,6 +127,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   orderAction('/zlecenia/:id/pomiar', (o, _p, who, f) =>
     s.orders.setMeasurementDate(o, f.measurementOn ?? '', who),
   );
+  orderAction('/zlecenia/:id/numer', (o, _p, who, f) => s.orders.setOrderNumber(o, f.orderNumber ?? '', who));
   orderAction('/zlecenia/:id/cofnij', (o, _p, who) => s.orders.undoLastStep(o, who));
   orderAction('/zlecenia/:id/osoby', (o, _p, who, f) => s.orders.assignPeople(o, toAssignment(f), who));
   registerHistoryUndo(app, s);
@@ -200,6 +205,7 @@ export function registerRoutes(app: FastifyInstance, s: WebServices): void {
   });
 
   registerWorkTypeRoutes(app, s, (reply, error) => renderSettings(reply, s, error, { open: 'rodzaje-prac' }));
+  registerCalendarRoutes(app, s, (reply, error) => renderSettings(reply, s, error, { open: 'kalendarz' }));
   registerOfferRoutes(app, s);
   registerUnpaidRoutes(app, s);
 
@@ -243,6 +249,7 @@ function renderSettings(
     workTypeHistory: s.workTypeAdmin.history(),
     message: { values: extras.typedMessage ?? { ...s.messages.get() }, history: s.messages.history() },
     openSection: extras.open,
+    calendar: s.calendarSync.status(),
   };
   return s.pages.send(
     reply,
@@ -341,7 +348,8 @@ function renderBoard(
         HTTP_NOT_FOUND,
       );
     const active = order.steps.find((st) => st.status === 'active');
-    const urgency = active ? s.board.urgencyOf(order, active, s.today()) : null;
+    const stepColours = s.board.stepUrgencies(order, s.today());
+    const urgency = s.board.orderUrgency(order, s.today());
     const workType = s.workTypes.findById(order.workTypeId)?.name ?? '?';
     detail = orderDetail(
       order,
@@ -351,6 +359,7 @@ function renderBoard(
       s.people.list(),
       s.orders.undoableEntryIds(orderId),
       active?.payment ? paymentMessageBox(paymentText(s, order), order.phone) : null,
+      stepColours,
     );
   }
   return s.pages.send(
@@ -383,6 +392,7 @@ function toOrderInput(f: Form): OrderInput {
     note: opt('note'),
     measurementOn: opt('measurementOn'),
     leadPerson: opt('leadPerson'),
+    orderNumber: opt('orderNumber'),
   };
 }
 

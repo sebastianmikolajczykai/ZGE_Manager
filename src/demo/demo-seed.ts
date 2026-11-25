@@ -11,10 +11,12 @@ import { UrgencyRules, DEFAULT_URGENCY_SETTINGS } from '../modules/urgency/urgen
  * - createdAgo: kiedy przyjęto zlecenie,
  * - doneAgo: kiedy odhaczono kolejne kroki (od pierwszego),
  * - checkedAgo: kiedy kliknięto „Sprawdzone dziś” na aktywnym kroku „codziennie”,
- * - measurementAgo: data pomiaru w terenie (0 = dziś; null = termin jeszcze nieustalony).
+ * - measurementAgo: data pomiaru w terenie (0 = dziś; null = termin jeszcze nieustalony),
+ * - number: przykładowy numer zlecenia z biura (bez numeru = wygląd starszych zleceń).
  */
 interface DemoOrder {
   client: string;
+  number?: string;
   town: string;
   plot: string;
   price: number;
@@ -27,6 +29,7 @@ interface DemoOrder {
 const DEMO_ORDERS: readonly DemoOrder[] = [
   {
     client: 'Jan Kowalski (przykład)',
+    number: '112 podział',
     town: 'Brzesko',
     plot: '123/4',
     price: 2500,
@@ -45,6 +48,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Maria Wiśniewska (przykład)',
+    number: '110 podział',
     town: 'Jurków',
     plot: '781',
     price: 2800,
@@ -54,6 +58,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Piotr Wójcik (przykład)',
+    number: '107 podział',
     town: 'Szczurowa',
     plot: '12/7',
     price: 3500,
@@ -63,6 +68,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Katarzyna Lewandowska (przykład)',
+    number: '108 podział',
     town: 'Dębno',
     plot: '402/1',
     price: 2600,
@@ -73,6 +79,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Tomasz Zieliński (przykład)',
+    number: '106 podział',
     town: 'Czchów',
     plot: '90',
     price: 4000,
@@ -82,6 +89,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Agnieszka Kamińska (przykład)',
+    number: '105 podział',
     town: 'Gnojnik',
     plot: '215/3',
     price: 3200,
@@ -92,6 +100,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   // Oddane klientowi, czekają na zapłatę (zakładka Niezapłacone): 16 i 3 dni robocze temu.
   {
     client: 'Ryszard Kowalczyk (przykład)',
+    number: '104 podział',
     town: 'Wojnicz',
     plot: '311/2',
     price: 3300,
@@ -101,6 +110,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Ewa Grabowska (przykład)',
+    number: '103 podział',
     town: 'Radłów',
     plot: '57/9',
     price: 2900,
@@ -111,6 +121,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   // Zapłacone (wszystkie kroki odhaczone): dochód w poprzednich miesiącach na ekranie Statystyki.
   {
     client: 'Henryk Wróbel (przykład)',
+    number: '102 podział',
     town: 'Brzesko',
     plot: '18/6',
     price: 2700,
@@ -120,6 +131,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Jolanta Pietrzak (przykład)',
+    number: '101 podział',
     town: 'Okocim',
     plot: '402',
     price: 3400,
@@ -129,6 +141,7 @@ const DEMO_ORDERS: readonly DemoOrder[] = [
   },
   {
     client: 'Stanisław Michalski (przykład)',
+    number: '100 podział',
     town: 'Jasień',
     plot: '77/1',
     price: 2500,
@@ -195,6 +208,7 @@ export function seedDemo(db: AppDatabase, today: LocalDate): void {
         note: null,
         measurementOn: demo.measurementAgo === null ? null : calendar.ago(demo.measurementAgo),
         leadPerson: person(n),
+        orderNumber: demo.number ?? null,
       },
       person(n),
     );

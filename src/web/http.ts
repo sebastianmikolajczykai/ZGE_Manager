@@ -1,5 +1,5 @@
 import type { FastifyReply } from 'fastify';
-import type { SafeHtml } from './html.js';
+import { html, type SafeHtml } from './html.js';
 import { layout, type NavCounts } from './views.js';
 
 /** Pola formularza po odczytaniu (nazwa → wartość). */
@@ -20,13 +20,23 @@ export class PageRenderer {
     readonly refreshSeconds: () => number,
     readonly counts: () => NavCounts,
     private readonly confirmActions: () => boolean = () => true,
+    /** Pasek ostrzeżenia nad treścią strony (np. błąd synchronizacji z Kalendarzem Google). */
+    private readonly banner: () => SafeHtml | string = () => '',
   ) {}
 
   send(reply: FastifyReply, title: string, body: SafeHtml, status = 200) {
     return reply
       .code(status)
       .type('text/html; charset=utf-8')
-      .send(layout(title, body, this.refreshSeconds(), this.counts(), this.confirmActions()));
+      .send(
+        layout(
+          title,
+          html`${this.banner()}${body}`,
+          this.refreshSeconds(),
+          this.counts(),
+          this.confirmActions(),
+        ),
+      );
   }
 }
 

@@ -15,7 +15,12 @@ export interface OrderInput {
   measurementOn: LocalDate | null;
   /** Osoba prowadząca zlecenie (opcjonalnie); do niej należą kroki bez przypisanej osoby. */
   leadPerson?: string | null;
+  /** Numer zlecenia nadawany w biurze, np. „125 podział” (opcjonalny, wolny tekst). */
+  orderNumber?: string | null;
 }
+
+/** Najdłuższy numer zlecenia (żeby zmieścił się na karcie i monitorze). */
+export const MAX_ORDER_NUMBER_LENGTH = 40;
 
 const dateChecker = new DayCounter('calendar');
 
@@ -32,6 +37,7 @@ export function parseOrderInput(raw: OrderInput): OrderInput {
     note: optional(raw.note),
     measurementOn: parseMeasurementDate(raw.measurementOn),
     leadPerson: optional(raw.leadPerson ?? null),
+    orderNumber: parseOrderNumber(raw.orderNumber ?? null),
   };
 }
 
@@ -49,4 +55,13 @@ export function parseMeasurementDate(value: LocalDate | null): LocalDate | null 
     throw new Error(`Nieprawidłowa data pomiaru: „${value}”`);
   }
   return value;
+}
+
+/** Numer zlecenia: litery, cyfry i inne znaki dowolnie; pusty = brak numeru. */
+export function parseOrderNumber(value: string | null): string | null {
+  const number = optional(value);
+  if (number !== null && number.length > MAX_ORDER_NUMBER_LENGTH) {
+    throw new Error(`Numer zlecenia może mieć najwyżej ${MAX_ORDER_NUMBER_LENGTH} znaków`);
+  }
+  return number;
 }

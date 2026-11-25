@@ -22,18 +22,32 @@ export class AppDatabase {
 
   /** Stosuje każdy plik migrations/*.sql dokładnie raz, w kolejności nazw, każdy w osobnej transakcji. */
   migrate(): void {
-    this.connection.exec(
-      "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))",
-    );
+    for (const name of this.pendingMigrations()) this.applyMigration(name);
+  }
+
+  /** Nazwy migracji, które jeszcze nie zostały zastosowane (w kolejności). */
+  pendingMigrations(): string[] {
+    this.ensureMigrationTable();
     const applied = new Set(
       (this.connection.prepare('SELECT name FROM schema_migrations').all() as { name: string }[]).map(
         (r) => r.name,
       ),
     );
-    const pending = readdirSync(MIGRATIONS_DIR)
+    return readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith('.sql') && !applied.has(f))
       .sort();
-    for (const name of pending) this.applyMigration(name);
+  }
+
+  /** Czy baza była już używana (ma zastosowaną choć jedną migrację); nowa, pusta baza = false. */
+  hasData(): boolean {
+    this.ensureMigrationTable();
+    return this.connection.prepare('SELECT 1 FROM schema_migrations LIMIT 1').get() !== undefined;
+  }
+
+  private ensureMigrationTable(): void {
+    this.connection.exec(
+      "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    );
   }
 
   /** Rzuca wyjątek, gdy baza nie odpowiada (np. jest zamknięta). */

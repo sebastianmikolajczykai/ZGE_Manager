@@ -6,6 +6,7 @@ import type { Colour } from '../../../src/modules/urgency/urgency-rules.js';
 function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): BoardRow {
   return {
     orderId,
+    orderNumber: null,
     clientName: `Klient ${orderId} (przykład)`,
     town: 'Brzesko',
     plot: '123/4',
@@ -16,7 +17,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     daysOnStep: 4,
     lastPerson: 'Bartek',
     pricePln: 2500,
-    owner: null,
+    owners: [],
     measurementMissing: false,
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
@@ -111,7 +112,7 @@ describe('Widok na monitor (styl D)', () => {
   });
 
   it('shows whose turn it is when someone owns the current step, otherwise who did something last', () => {
-    const owned = tile(monitorPage([row(7, 'green', { owner: 'Marcelina' })], COUNTS, 60), 'Klient 7');
+    const owned = tile(monitorPage([row(7, 'green', { owners: ['Marcelina'] })], COUNTS, 60), 'Klient 7');
     expect(owned).toContain('Marcelina');
     expect(owned).not.toContain('Bartek');
     expect(tile(page, 'Klient 1 (przykład)')).toMatch(/ostatnio[\s\S]*Bartek/);
@@ -121,5 +122,19 @@ describe('Widok na monitor (styl D)', () => {
     const shown = monitorPage([row(8, 'green', { measurementMissing: true }), row(9, 'green')], COUNTS, 60);
     expect(tile(shown, 'Klient 8')).toContain('Uzupełnij datę pomiaru');
     expect(tile(shown, 'Klient 9')).not.toContain('Uzupełnij datę pomiaru');
+  });
+});
+
+describe('monitor: numer zlecenia zamiast klienta, bez kwot', () => {
+  const page = monitorPage([row(1, 'red', { orderNumber: '125 podział' }), row(2, 'green')], COUNTS, 60);
+
+  it('shows the order number on the tile and the client name only for orders without one', () => {
+    expect(page).toContain('125 podział');
+    expect(page).not.toContain('Klient 1 (przykład)');
+    expect(page).toContain('Klient 2 (przykład)');
+  });
+
+  it('never shows amounts', () => {
+    expect(page).not.toContain('zł');
   });
 });

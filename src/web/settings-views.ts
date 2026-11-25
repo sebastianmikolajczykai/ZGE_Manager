@@ -22,6 +22,8 @@ import type { WorkTypeHistoryEntry } from '../modules/work-types/work-type-admin
 import { workTypesSection } from './work-type-views.js';
 import { appearanceChoice } from './theme.js';
 import { messageSettingsSection, type MessageSettingsView } from './message-views.js';
+import { calendarSection } from './calendar-sync-views.js';
+import type { SyncStatus } from '../modules/calendar-sync/calendar-sync-service.js';
 
 /** Potwierdzenie po zapisie: ile pól się zmieniło i kto zapisał. */
 export interface SavedNote {
@@ -42,12 +44,13 @@ export interface SettingsView {
   workTypes: WorkType[];
   workTypeHistory: WorkTypeHistoryEntry[];
   message: MessageSettingsView;
+  calendar: SyncStatus;
   /** Sekcja rozwinięta od razu (po zapisie albo przy błędzie), żeby było widać wynik. */
   openSection?: SettingsSectionId;
 }
 
 /** Sekcje Ustawień; id = kotwica w adresie (np. /ustawienia#osoby) i w menu u góry. */
-export type SettingsSectionId = 'kolory' | 'rodzaje-prac' | 'dni-wolne' | 'wiadomosc' | 'osoby';
+export type SettingsSectionId = 'kolory' | 'rodzaje-prac' | 'dni-wolne' | 'wiadomosc' | 'kalendarz' | 'osoby';
 
 /** Ustawienia jako wartości pól formularza (przełącznik: '1' = włączony, brak = wyłączony). */
 export function settingsFormValues(settings: AppSettings): Record<string, string> {
@@ -70,7 +73,7 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     <nav class="settings-nav" aria-label="Sekcje ustawień">
       <a href="#kolory">🎨 Kolory i przypomnienia</a><a href="#rodzaje-prac">🧭 Rodzaje prac</a
       ><a href="#dni-wolne">🏖 Dni wolne</a><a href="#wiadomosc">✉️ Wiadomość SMS</a
-      ><a href="#osoby">👥 Osoby</a>
+      ><a href="#kalendarz">📅 Kalendarz Google</a><a href="#osoby">👥 Osoby</a>
     </nav>
     ${appearanceChoice()} ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <p class="settings-hint"><small>Kliknij nazwę sekcji, żeby ją rozwinąć albo zwinąć.</small></p>
@@ -84,6 +87,13 @@ export function settingsPage(people: Person[], view: SettingsView, error: string
     )}
     ${section('dni-wolne', 'Dni wolne firmy', view.daysOff.length, daysOffSection(view.daysOff, people), open)}
     ${section('wiadomosc', 'Wiadomość do klienta (SMS)', null, messageSettingsSection(view.message, people), open)}
+    ${section(
+      'kalendarz',
+      'Kalendarz Google (przypomnienia „Zadzwoń”)',
+      null,
+      calendarSection(view.calendar, people),
+      open,
+    )}
     ${section('osoby', 'Osoby (przyciski „kto zrobił”)', people.length, peopleSection(people), open)}
   </section>`;
 }

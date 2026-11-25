@@ -10,7 +10,14 @@ export const DEFAULT_WORK_TYPES: readonly WorkTypeDefinition[] = [
     name: 'Podział nieruchomości',
     steps: [
       { name: 'Ustalenie terminu pomiaru w terenie', kind: 'own', limitDays: 2, provisional: false },
-      { name: 'Analiza materiałów w urzędzie', kind: 'own', limitDays: 2, provisional: false },
+      // Kartka: „Ia”, 1–2 dni; rozmowa 24.11: robione w tym samym czasie co krok 1 (Łukasz termin, Bartek analiza).
+      {
+        name: 'Analiza materiałów w urzędzie',
+        kind: 'own',
+        limitDays: 2,
+        provisional: false,
+        parallel: true,
+      },
       { name: 'Wysłanie zawiadomień', kind: 'own', limitDays: 2, provisional: false },
       { name: 'Wstępny projekt podziału', kind: 'own', limitDays: 5, provisional: false },
       { name: 'Śledzenie zawiadomień (Poczta Polska)', kind: 'daily', limitDays: null, provisional: false },

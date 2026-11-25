@@ -18,7 +18,7 @@ function ownStep(overrides: Partial<StepState> = {}): StepState {
   };
 }
 
-describe('UrgencyRules: own step, idle thresholds (2 yellow / 3 red)', () => {
+describe('UrgencyRules: own step without a limit, idle thresholds (2 yellow / 3 red)', () => {
   it.each([
     ['2026-11-01', 'green'],
     ['2026-11-02', 'green'],
@@ -61,8 +61,15 @@ describe('UrgencyRules: step limit (tick day = day 0, yellow on day N-1, red on 
     expect(rules.evaluate(step, '2026-11-06').colour).toBe('red');
   });
 
-  it('the earlier trigger wins: idle red before the limit ends', () => {
-    expect(rules.evaluate(ownStep({ limitDays: 10 }), '2026-11-04').colour).toBe('red');
+  it('a step with a limit ignores the "no movement" rule: limit 5 is still green after 3 idle days', () => {
+    expect(rules.evaluate(ownStep({ limitDays: 5 }), '2026-11-04').colour).toBe('green');
+  });
+
+  it('a step with a limit is yellow only the day before the limit, never earlier because of idling', () => {
+    const step = ownStep({ limitDays: 10 });
+    expect(rules.evaluate(step, '2026-11-09').colour).toBe('green');
+    expect(rules.evaluate(step, '2026-11-10').colour).toBe('yellow');
+    expect(rules.evaluate(step, '2026-11-11')).toMatchObject({ colour: 'red', daysOverdue: 1 });
   });
 });
 
@@ -250,5 +257,30 @@ describe('UrgencyRules: company days off', () => {
 
   it('counts working days for the lists the same way as the colours', () => {
     expect(new UrgencyRules(withDayOff).daysBetween('2026-11-16', '2026-11-18')).toBe(1);
+  });
+});
+
+describe('UrgencyRules.dueOn: kiedy zadzwonić (dzień, w którym sprawa robi się czerwona)', () => {
+  it('is the day the limit runs out, counted from the last contact', () => {
+    expect(rules.dueOn('2026-11-01', 7, '2026-11-02')).toBe('2026-11-08');
+  });
+
+  it('is today when the deadline has already passed (no reminders in the past)', () => {
+    expect(rules.dueOn('2026-11-01', 7, '2026-11-20')).toBe('2026-11-20');
+  });
+
+  it('is today when there is no limit', () => {
+    expect(rules.dueOn('2026-11-01', null, '2026-11-05')).toBe('2026-11-05');
+  });
+
+  it('agrees with the colour: red exactly on that day', () => {
+    const due = rules.dueOn('2026-11-01', 7, '2026-11-01');
+    const step: StepState = {
+      kind: 'waiting',
+      limitDays: 7,
+      startedOn: '2026-11-01',
+      lastActivityOn: '2026-11-01',
+    };
+    expect(rules.evaluate(step, due).colour).toBe('red');
   });
 });

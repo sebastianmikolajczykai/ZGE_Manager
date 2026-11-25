@@ -16,6 +16,8 @@ export interface StepDraft {
   /** Tekst z pola (puste = bez limitu). */
   limit: string;
   payment: boolean;
+  /** Krok idzie w tym samym czasie co poprzedni. */
+  parallel: boolean;
 }
 
 export interface WorkTypeDraft {
@@ -23,7 +25,7 @@ export interface WorkTypeDraft {
   steps: StepDraft[];
 }
 
-const DEFAULT_NEW_STEP: StepDraft = { name: '', kind: 'own', limit: '2', payment: false };
+const DEFAULT_NEW_STEP: StepDraft = { name: '', kind: 'own', limit: '2', payment: false, parallel: false };
 const MAX_STEPS = 40;
 
 export function emptyDraft(): WorkTypeDraft {
@@ -38,6 +40,7 @@ export function draftFromWorkType(w: WorkType): WorkTypeDraft {
       kind: s.kind,
       limit: s.limitDays === null ? '' : String(s.limitDays),
       payment: s.payment,
+      parallel: s.parallel ?? false,
     })),
   };
 }
@@ -51,6 +54,7 @@ export function draftFromForm(form: Form): WorkTypeDraft {
       kind: (form[`stepKind_${i}`] ?? 'own') as StepKind,
       limit: form[`stepLimit_${i}`] ?? '',
       payment: form.payment === String(i),
+      parallel: form[`stepParallel_${i}`] !== undefined,
     });
   }
   return { name: form.workTypeName ?? '', steps };
@@ -89,6 +93,8 @@ export function definitionFromDraft(draft: WorkTypeDraft): WorkTypeDefinition {
       limitDays: KINDS_WITHOUT_LIMIT.includes(s.kind) ? null : parseLimit(s, index + 1),
       provisional: false,
       payment: s.payment,
+      // Pierwszy krok nie ma poprzednika (np. po przesunięciu kroku na górę).
+      parallel: index > 0 && s.parallel,
     })),
   };
 }

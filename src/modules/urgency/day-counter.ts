@@ -36,6 +36,24 @@ export class DayCounter {
     return count;
   }
 
+  /** Dzień, w którym od `from` minie `days` dni (odwrotność daysBetween); 0 = ten sam dzień. */
+  dateAfter(from: LocalDate, days: number): LocalDate {
+    if (!Number.isInteger(days) || days < 0) throw new Error(`Liczba dni musi być nieujemna (jest ${days})`);
+    let day = toEpochDay(from);
+    for (let counted = 0; counted < days;) {
+      day++;
+      if (this.mode === 'calendar' || this.isWorkingEpochDay(day)) counted++;
+    }
+    return toIsoDate(day);
+  }
+
+  /** Ten sam dzień, jeśli jest roboczy, w przeciwnym razie najbliższy następny dzień roboczy. */
+  workingDayOnOrAfter(date: LocalDate): LocalDate {
+    let day = toEpochDay(date);
+    while (this.mode === 'working' && !this.isWorkingEpochDay(day)) day++;
+    return toIsoDate(day);
+  }
+
   private isWorkingEpochDay(epochDay: number): boolean {
     if (!isWeekday(epochDay)) return false;
     const date = toIsoDate(epochDay);

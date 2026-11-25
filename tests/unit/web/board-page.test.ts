@@ -6,6 +6,7 @@ import type { Colour } from '../../../src/modules/urgency/urgency-rules.js';
 function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): BoardRow {
   return {
     orderId,
+    orderNumber: null,
     clientName: `Klient ${orderId} (przykład)`,
     town: 'Brzesko',
     plot: null,
@@ -17,7 +18,7 @@ function row(orderId: number, colour: Colour, extra: Partial<BoardRow> = {}): Bo
     lastPerson: 'Bartek',
     pricePln: 2500,
     measurementMissing: false,
-    owner: null,
+    owners: [],
     urgency: { colour, blink: false, daysOverdue: colour === 'red' ? 3 : 0 },
     ...extra,
   };
@@ -141,10 +142,10 @@ describe('Tablica: filtr „Moje” (bez logowania)', () => {
     { id: 2, name: 'Bartek' },
   ];
   const OWNED = [
-    row(1, 'red', { owner: 'Bartek' }),
-    row(2, 'yellow', { owner: 'Łukasz' }),
-    row(3, 'green', { owner: 'Bartek' }),
-    row(4, 'green', { owner: null }),
+    row(1, 'red', { owners: ['Bartek'] }),
+    row(2, 'yellow', { owners: ['Łukasz'] }),
+    row(3, 'green', { owners: ['Bartek'] }),
+    row(4, 'green', { owners: [] }),
   ];
   const mine = boardPage(OWNED, null, null, null, {
     counts: COUNTS,
@@ -193,5 +194,30 @@ describe('Tablica: filtr „Moje” (bez logowania)', () => {
 
   it('shows the owner of the current step in the list', () => {
     expect(mine).toMatch(/class="assignee"[\s\S]*Bartek/);
+  });
+});
+
+describe('Tablica: numer zlecenia zamiast klienta, bez kwot (monitor widzą goście)', () => {
+  const rows = [row(1, 'red', { orderNumber: '125 podział' }), row(2, 'green')];
+  const page = boardPage(rows, null, null, null, { counts: COUNTS, filter: null }).value;
+
+  it('shows the order number first, instead of the client name', () => {
+    expect(page).toContain('<th>Zlecenie</th>');
+    expect(page).toContain('125 podział');
+    expect(page).not.toMatch(/<a [^>]*>Klient 1 \(przykład\)<\/a>/);
+  });
+
+  it('shows the client name for an order without a number (old orders)', () => {
+    expect(page).toContain('Klient 2 (przykład)');
+  });
+
+  it('keeps the client name searchable but hidden for numbered orders (search box still finds the client)', () => {
+    expect(page).toMatch(/<span hidden>Klient 1 \(przykład\)<\/span>/);
+    expect(page).toContain('Szukaj numeru, klienta, miejscowości');
+  });
+
+  it('shows no prices on the list', () => {
+    expect(page).not.toContain('zł');
+    expect(page).not.toContain('<th class="num">Cena</th>');
   });
 });

@@ -82,6 +82,7 @@ export function workTypeEditor(state: EditorState): SafeHtml {
             <th>Krok</th>
             <th>Rodzaj</th>
             <th>Limit (dni rob.)</th>
+            <th>Razem z poprzednim</th>
             <th>Zapłata</th>
             <th>Kolejność</th>
           </tr>
@@ -97,6 +98,10 @@ export function workTypeEditor(state: EditorState): SafeHtml {
       <p><button class="secondary" name="op" value="add">+ Dodaj krok</button></p>
       <ul class="hints">
         <li>Limit puste = bez limitu. „Sprawdzamy codziennie” i „W ustalonym dniu” nie mają limitu.</li>
+        <li>
+          Razem z poprzednim: krok startuje tego samego dnia co krok nad nim (np. termin pomiaru i analiza
+          materiałów). Każdy ma własny limit, osobę i przycisk; następny krok rusza, gdy oba są zrobione.
+        </li>
         <li>Zapłata: od tego kroku zlecenie przechodzi z Tablicy do zakładki Niezapłacone.</li>
         <li>
           Zapisanie zatwierdza limity (znika dopisek „do potwierdzenia”). Otwarte zlecenia się nie zmieniają.
@@ -108,6 +113,17 @@ export function workTypeEditor(state: EditorState): SafeHtml {
     </form>
     ${workType ? moreActions(workType, people) : ''}
   </section>`;
+}
+
+/** Pole „razem z poprzednim” (krok 1 go nie ma, bo nie ma kroku przed nim). */
+function parallelBox(step: StepDraft, n: number): SafeHtml {
+  return html`<input
+    type="checkbox"
+    name="stepParallel_${n}"
+    value="1"
+    ${step.parallel ? 'checked' : ''}
+    aria-label="Krok ${n} w tym samym czasie co krok ${n - 1}"
+  />`;
 }
 
 function stepRow(step: StepDraft, n: number, total: number): SafeHtml {
@@ -136,6 +152,7 @@ function stepRow(step: StepDraft, n: number, total: number): SafeHtml {
         />`,
       )}
     </td>
+    <td class="center">${n === 1 ? '' : parallelBox(step, n)}</td>
     <td class="center">
       <input
         type="radio"

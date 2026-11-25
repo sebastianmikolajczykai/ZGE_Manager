@@ -3,7 +3,10 @@ import { PolishHolidays } from './polish-holidays.js';
 
 export type Colour = 'green' | 'yellow' | 'red';
 
-/** own = krok robimy my; waiting = czekamy na urząd lub klienta (liczy się tylko limit kroku). */
+/**
+ * own = krok robimy my: z limitem liczy się limit, bez limitu progi „brak ruchu”;
+ * waiting = czekamy na urząd lub klienta (liczy się tylko limit kroku).
+ */
 export type StepKind = 'own' | 'waiting';
 
 export interface UrgencySettings {
@@ -79,6 +82,27 @@ export class UrgencyRules {
     return this.snapshot().counter.daysBetween(from, to);
   }
 
+  /** Termin po `days` dniach (robocze, bez świąt i dni wolnych firmy) – do przypomnień w kalendarzu. */
+  addDays(from: LocalDate, days: number): LocalDate {
+    return this.snapshot().counter.dateAfter(from, days);
+  }
+
+  /** Dziś, jeśli to dzień roboczy, inaczej najbliższy dzień roboczy. */
+  workingDayOnOrAfter(date: LocalDate): LocalDate {
+    return this.snapshot().counter.workingDayOnOrAfter(date);
+  }
+
+  /**
+   * Kiedy zadzwonić: dzień, w którym od ostatniego kontaktu minie limit (sprawa robi się wtedy czerwona).
+   * Nigdy wcześniej niż dziś; bez limitu = dziś. Do przypomnień w Kalendarzu Google.
+   */
+  dueOn(lastContactOn: LocalDate, limitDays: number | null, today: LocalDate): LocalDate {
+    if (limitDays === null) return today;
+    const due = this.snapshot().counter.dateAfter(lastContactOn, limitDays);
+    // Daty RRRR-MM-DD porównują się poprawnie jako tekst.
+    return due > today ? due : today;
+  }
+
   evaluate(step: StepState, today: LocalDate): Urgency {
     const { settings, counter } = this.snapshot();
     validateStep(step, counter);
@@ -86,7 +110,8 @@ export class UrgencyRules {
     const elapsed = counter.daysBetween(step.startedOn, today);
     const daysToLimit = step.limitDays === null ? null : step.limitDays - elapsed;
 
-    const idleRules = step.kind === 'own';
+    // „Brak ruchu” tylko w krokach bez limitu: gdy krok ma limit, kolor wynika z limitu (żółte przed limitem, czerwone w dniu limitu).
+    const idleRules = step.kind === 'own' && step.limitDays === null;
     const idleOverdue = idleRules ? idle - settings.redAfterIdleDays + 1 : 0;
     const limitOverdue = daysToLimit === null ? 0 : 1 - daysToLimit;
     const daysOverdue = Math.max(0, idleOverdue, limitOverdue);

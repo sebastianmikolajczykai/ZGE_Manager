@@ -22,6 +22,8 @@ export interface OfferWebServices {
   workTypes: WorkTypeRepository;
   today: () => LocalDate;
   pages: PageRenderer;
+  /** Automatyczna synchronizacja z Kalendarzem Google: gdy włączona, ręczny przycisk „Dodaj przypomnienie” znika. */
+  calendarSync?: { status(): { enabled: boolean } };
 }
 
 const TITLE = 'Oferty';
@@ -112,6 +114,8 @@ function renderOffers(
       s.people.list(),
       s.offers.reminderDays(),
       s.offers.undoableEntryId(offerId),
+      // Przy włączonej synchronizacji wydarzenie robi się samo, więc bez ręcznego przycisku (bez duplikatów).
+      offer.status === 'open' && !s.calendarSync?.status().enabled ? s.offers.callDueOn(offerId) : null,
     );
   }
   return s.pages.send(

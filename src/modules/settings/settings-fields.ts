@@ -38,7 +38,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   {
     key: 'yellowAfterIdleDays',
     label: 'Żółte, gdy brak ruchu przez',
-    hint: 'dni roboczych',
+    hint: 'dni roboczych (tylko kroki bez limitu)',
     type: 'number',
     min: 1,
     max: 30,
@@ -46,7 +46,7 @@ export const SETTING_FIELDS: readonly SettingField[] = [
   {
     key: 'redAfterIdleDays',
     label: 'Czerwone, gdy brak ruchu przez',
-    hint: 'dni roboczych',
+    hint: 'dni roboczych (tylko kroki bez limitu)',
     type: 'number',
     min: 1,
     max: 60,

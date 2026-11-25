@@ -2,6 +2,7 @@ import { html, SafeHtml } from './html.js';
 import { avatar, progressBar, STATUS_ICON } from './view-helpers.js';
 import { refreshMs, type NavCounts } from './views.js';
 import type { BoardRow } from '../modules/board/board-service.js';
+import { orderLabel } from '../modules/orders/order-label.js';
 import type { Colour } from '../modules/urgency/urgency-rules.js';
 
 /**
@@ -69,7 +70,7 @@ function tile(r: BoardRow): SafeHtml {
   const late = daysOverdue > 0 ? ` · ${daysOverdue} ${dayWord(daysOverdue)}` : '';
   return html`<article class="t ${colour}${blink ? ' blink' : ''}">
     <div class="lab">${STATUS_ICON[colour]} ${COLOUR_LABEL[colour]}${late}</div>
-    <div class="n">${r.clientName}</div>
+    <div class="n">${orderLabel(r)}</div>
     <div class="tw">📍 ${r.town}${r.plot ? `, dz. ${r.plot}` : ''}</div>
     <div class="st">${r.currentStepName}</div>
     ${r.measurementMissing ? html`<div class="nd">📅 Uzupełnij datę pomiaru</div>` : ''}
@@ -81,9 +82,9 @@ function tile(r: BoardRow): SafeHtml {
   </article>`;
 }
 
-/** Czyja kolej: osoba bieżącego kroku; gdy nikt nie jest przypisany, kto ostatnio coś zrobił. */
+/** Czyja kolej: osoby bieżących kroków; gdy nikt nie jest przypisany, kto ostatnio coś zrobił. */
 function who(r: BoardRow): SafeHtml | string {
-  if (r.owner) return html`${avatar(r.owner)} ${r.owner}`;
+  if (r.owners.length > 0) return html`${r.owners.map((name) => html`${avatar(name)} ${name} `)}`;
   if (r.lastPerson) return html`<small>ostatnio</small> ${avatar(r.lastPerson)} ${r.lastPerson}`;
   return '–';
 }

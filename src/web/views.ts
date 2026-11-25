@@ -1,5 +1,7 @@
 import { html, SafeHtml } from './html.js';
 import { googleCalendarLink } from '../modules/calendar/google-calendar-link.js';
+import { orderLabel } from '../modules/orders/order-label.js';
+import { MAX_ORDER_NUMBER_LENGTH } from '../modules/orders/order-input.js';
 import {
   avatar,
   fold,
@@ -173,7 +175,7 @@ export function boardPage(
           <input
             type="search"
             id="szukaj"
-            placeholder="🔍 Szukaj klienta, miejscowości, działki…"
+            placeholder="🔍 Szukaj numeru, klienta, miejscowości, działki…"
             aria-label="Szukaj"
             autocomplete="off"
           />
@@ -199,7 +201,7 @@ export function boardPage(
 
 /** Filtry Tablicy: najpierw osoba („Moje”, liczą się z tego kafelki), potem kolor. */
 function filterRows(rows: BoardRow[], filter: BoardFilter, person: string | null) {
-  const mine = person ? rows.filter((r) => r.owner === person) : rows;
+  const mine = person ? rows.filter((r) => r.owners.includes(person)) : rows;
   const shown = mine.filter((r) => matchesFilter(r, filter));
   return { mine, shown };
 }
@@ -271,12 +273,11 @@ function boardTable(
     <thead>
       <tr>
         <th>Status</th>
-        <th>Klient</th>
+        <th>Zlecenie</th>
         <th>Miejscowość / działka</th>
         <th>Bieżący krok</th>
         <th class="num">Dni na kroku</th>
         <th>Ostatnio</th>
-        <th class="num">Cena</th>
       </tr>
     </thead>
     <tbody>
@@ -287,18 +288,21 @@ function boardTable(
             onclick="location.href='${link(r.orderId)}'"
           >
             <td>${statusChip(r.urgency.colour, COLOUR_LABEL[r.urgency.colour])}</td>
-            <td><a href="${link(r.orderId)}">${r.clientName}</a><small>${r.workTypeName}</small></td>
+            <td>
+              <a href="${link(r.orderId)}">${orderLabel(r)}</a
+              ><small>${r.workTypeName}</small
+              >${r.orderNumber ? html`<span hidden>${r.clientName}</span>` : ''}
+            </td>
             <td>${r.town}${r.plot ? html`<small>dz. ${r.plot}</small>` : ''}</td>
             <td class="step-cell">
               ${r.currentStepName} ${progressBar(r.currentStepPosition, r.stepCount)}
-              ${r.owner ? assigneeTag(r.owner) : ''} ${r.measurementMissing ? NO_DATE_LABEL : ''}
+              ${r.owners.map((name) => assigneeTag(name))} ${r.measurementMissing ? NO_DATE_LABEL : ''}
             </td>
             <td class="num">
               <b>${r.daysOnStep}</b
               >${r.urgency.daysOverdue > 0 ? html`<small class="late">${r.urgency.daysOverdue} po terminie</small>` : ''}
             </td>
             <td>${personTag(r.lastPerson)}</td>
-            <td class="num">${formatPrice(r.pricePln)}</td>
           </tr>`,
       )}
     </tbody>
@@ -320,15 +324,18 @@ export function orderDetail(
   undoableIds: number[] = [],
   /** Ramka z wiadomością SMS (tylko gdy zlecenie czeka na zapłatę). */
   messageBox: SafeHtml | null = null,
+  /** Kolor każdego bieżącego kroku (kroki równoległe mają własne limity i kolory). */
+  stepColours?: ReadonlyMap<number, Urgency>,
 ): SafeHtml {
   const activeStep = order.steps.find((st) => st.status === 'active');
   return html`<section class="detail card-${urgency?.colour ?? 'none'}" aria-label="Szczegóły zlecenia">
     <div class="detail-head">
-      <h2>${order.clientName}</h2>
+      <h2>${orderLabel(order)}</h2>
       ${orderStatus(order, urgency)}
     </div>
     ${activeStep ? progressBar(activeStep.position, order.steps.length) : ''}
     <dl class="facts">
+      ${numberFact(order, people)}
       <dt>Telefon</dt>
       <dd><a href="tel:${order.phone}">${order.phone}</a></dd>
       <dt>Miejscowość</dt>
@@ -357,7 +364,7 @@ export function orderDetail(
     </dl>
     ${messageBox ?? ''}
     <h3>Kroki</h3>
-    ${stepsSection(order, people, urgency)} ${assignForm(order, people)}
+    ${stepsSection(order, people, urgency, stepColours)} ${assignForm(order, people)}
     ${historySection(history, orderUndo(order.id, undoableIds, people))}
   </section>`;
 }
@@ -368,6 +375,34 @@ function orderStatus(order: Order, urgency: Urgency | null): SafeHtml {
   if (!urgency) return html``;
   const late = urgency.daysOverdue > 0 ? ` · ${urgency.daysOverdue} dni` : '';
   return statusChip(urgency.colour, `${COLOUR_LABEL[urgency.colour]}${late}`);
+}
+
+/** Wiersz „Nr zlecenia” na karcie: numer z biura (albo „brak”), formularz wpisania / zmiany (z historią i cofaniem) i klient. */
+function numberFact(order: Order, people: Person[]): SafeHtml {
+  const field = html`<input
+    class="number-input"
+    name="orderNumber"
+    aria-label="Numer zlecenia"
+    maxlength="${MAX_ORDER_NUMBER_LENGTH}"
+    placeholder="np. 125 podział"
+    value="${order.orderNumber ?? ''}"
+  />`;
+  const buttons = personButtons(`/zlecenia/${order.id}/numer`, 'Zapisz numer', people, 'secondary', field);
+  const summary = order.orderNumber ? 'Zmień numer zlecenia' : 'Wpisz numer zlecenia';
+  // Z numerem w tytule karty imię i nazwisko klienta pokazujemy w osobnym wierszu.
+  const client = order.orderNumber
+    ? html`<dt>Klient</dt>
+        <dd>${order.clientName}</dd>`
+    : '';
+  return html`<dt>Nr zlecenia</dt>
+    <dd>
+      ${order.orderNumber ?? html`<small>brak</small>`}
+      <details class="limit-change">
+        <summary>${summary}</summary>
+        ${buttons}
+      </details>
+    </dd>
+    ${client}`;
 }
 
 /**
@@ -409,7 +444,7 @@ function measurementForm(order: Order, people: Person[]): SafeHtml {
 function calendarButton(order: Order, workTypeName: string): SafeHtml {
   const place = order.plot ? `${order.town}, dz. ${order.plot}` : order.town;
   const link = googleCalendarLink({
-    title: `Pomiar: ${order.clientName}, ${order.town}`,
+    title: `Pomiar: ${orderLabel(order)}, ${order.town}`,
     date: order.measurementOn ?? '',
     location: place,
     details: [
@@ -424,13 +459,19 @@ function calendarButton(order: Order, workTypeName: string): SafeHtml {
 }
 
 /** Zrobione kroki i kroki do zrobienia zwinięte pod strzałkami, bieżący krok zawsze widoczny (numery jak w rodzaju pracy). */
-function stepsSection(order: Order, people: Person[], urgency: Urgency | null): SafeHtml {
+function stepsSection(
+  order: Order,
+  people: Person[],
+  urgency: Urgency | null,
+  stepColours: ReadonlyMap<number, Urgency> = new Map(),
+): SafeHtml {
   const done = order.steps.filter((s) => s.status === 'done');
   const current = order.steps.filter((s) => s.status === 'active');
   const todo = order.steps.filter((s) => s.status === 'pending');
+  const together = current.length > 1;
   const list = (steps: OrderStep[]) =>
     html`<ol class="steps">
-      ${steps.map((s) => stepItem(order, s, people, urgency))}
+      ${steps.map((s) => stepItem(order, s, people, stepColours.get(s.position) ?? urgency, together))}
     </ol>`;
   return html`${done.length > 0 ? fold('steps-done', `Zrobione kroki (${done.length})`, list(done)) : ''}
   ${current.length > 0 ? list(current) : ''}
@@ -460,14 +501,32 @@ export function historySection(history: HistoryEntry[], undo: HistoryUndo): Safe
   return fold('history', `Historia (${history.length})`, historyList(history, historyText, undo));
 }
 
-function stepItem(order: Order, step: OrderStep, people: Person[], urgency: Urgency | null): SafeHtml {
+/** `together` = teraz trwa kilka kroków równoległych: każdy pokazuje własny kolor. */
+function stepItem(
+  order: Order,
+  step: OrderStep,
+  people: Person[],
+  urgency: Urgency | null,
+  together = false,
+): SafeHtml {
   const active = step.status === 'active';
   return html`<li value="${step.position}" class="step ${step.status}">
-    ${active ? html`<span class="now-label">CO TERAZ · krok ${step.position} z ${order.steps.length}</span>` : ''}
+    ${active ? nowLabel(order, step, together ? urgency : null) : ''}
     <span class="dot" aria-hidden="true">${step.status === 'done' ? '✓' : step.position}</span
     ><span class="name">${step.name}</span>${step.assignee ? assigneeTag(step.assignee) : ''}
     ${stepMeta(step, active ? urgency : null)}${active ? stepActions(order, step, people) : ''}
   </li>`;
+}
+
+/** „CO TERAZ · krok N z M”; przy krokach równoległych dopisek „równolegle” i własny kolor kroku. */
+function nowLabel(order: Order, step: OrderStep, parallelUrgency: Urgency | null): SafeHtml {
+  const label = html`<span class="now-label"
+    >CO TERAZ · krok ${step.position} z ${order.steps.length}${parallelUrgency ? ' · równolegle' : ''}</span
+  >`;
+  if (!parallelUrgency) return label;
+  return html`<span class="now-row"
+    >${label} ${statusChip(parallelUrgency.colour, COLOUR_LABEL[parallelUrgency.colour])}</span
+  >`;
 }
 
 /** Pod nazwą kroku: kto i kiedy zrobił albo limit (przy bieżącym kroku także ile dni po terminie). */
@@ -588,6 +647,7 @@ const HISTORY_WORDS: Record<HistoryEntry['action'], (step: SafeHtml, note: SafeH
   lead_changed: (_step, note) => html`osoba prowadząca${note}`,
   step_assigned: (step, note) => html`osoba do kroku${step}${note}`,
   measurement_set: (_step, note) => html`data pomiaru${note}`,
+  number_set: (_step, note) => html`numer zlecenia${note}`,
 };
 
 export function historyText(h: HistoryEntry): SafeHtml {
@@ -612,6 +672,10 @@ export function orderForm(
     ${error ? html`<p class="error" role="alert">${error}</p>` : ''}
     <form method="post" action="/zlecenia" class="order-form">
       ${v('offerId') ? html`<input type="hidden" name="offerId" value="${v('offerId')}" />` : ''}
+      <label
+        >Nr zlecenia <small>(opcjonalnie, np. „125 podział”; na tablicy widać go jako pierwszy)</small>
+        <input name="orderNumber" maxlength="${MAX_ORDER_NUMBER_LENGTH}" value="${v('orderNumber')}"
+      /></label>
       <label>Klient <input name="clientName" required value="${v('clientName')}" /></label>
       <label>Telefon <input name="phone" required inputmode="tel" value="${v('phone')}" /></label>
       <label>Miejscowość <input name="town" required value="${v('town')}" /></label>
@@ -823,7 +887,8 @@ main { padding:18px 22px; min-width:0; }
 .tile.offers .ti { background:#dbeafe; } .tile.unpaid .ti { background:#f3e8ff; }
 .tiles.six { grid-template-columns:repeat(6,minmax(0,1fr)); } .tile.no-date .ti { background:#ffedd5; }
 .missing-date { display:inline-flex; align-items:center; gap:5px; margin-top:4px; padding:3px 10px; border-radius:999px; background:#ffedd5; color:#9a3412; border:1px solid #fdba74; font-weight:700; font-size:14px; }
-.measurement-form { margin-top:8px; } .date-input { font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; margin-bottom:8px; }
+.measurement-form { margin-top:8px; } .number-input { width:100%; max-width:320px; box-sizing:border-box; }
+.date-input, .number-input { font:inherit; padding:8px 10px; border-radius:10px; border:1px solid #d1d5db; margin-bottom:8px; }
 .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
 .toolbar input[type=search] { flex:1; max-width:420px; font:inherit; padding:9px 14px; border-radius:10px; border:1px solid #d1d5db; background:#fff; }
 .filter { padding:7px 14px; border-radius:999px; background:var(--ink); color:#fff; text-decoration:none; font-weight:600; font-size:15px; }
@@ -861,7 +926,7 @@ dl { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; } dt { color:va
 /* Kroki jako oś z numerkami; bieżący krok to wyróżniony blok „CO TERAZ”. */
 .steps { list-style:none; padding:0; margin:0; }
 .step { display:grid; grid-template-columns:28px 1fr; column-gap:10px; padding:4px 0; }
-.step > small, .step > .actions, .step > .now-label { grid-column:2; } .step .dot { grid-row:span 2; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; background:var(--line); }
+.step > small, .step > .actions, .step > .now-label, .step > .now-row { grid-column:2; } .now-row { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; } .step .dot { grid-row:span 2; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; background:var(--line); }
 .step.done { color:var(--muted); } .step.done .dot { background:var(--green); color:var(--green-ink); }
 .step.active { background:#f0fdf4; border-left:6px solid var(--brand); border-radius:12px; padding:12px 12px 10px 8px; margin:6px 0; }
 .card-red .step.active { background:#fef2f2; border-color:var(--red-bar); } .card-red .now-label { color:var(--red-ink); }

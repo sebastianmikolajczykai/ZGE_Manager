@@ -63,6 +63,39 @@ describe('Ustawienia → Rodzaje prac (edytor)', () => {
     expect(page).toMatch(/name="payment"\s+value="13"\s+checked/);
   });
 
+  it('the editor shows "w tym samym czasie co poprzedni" (checked for Analiza materiałów; none for step 1)', async () => {
+    const page = await get('/ustawienia/prace/1');
+    expect(page).toMatch(/name="stepParallel_2"[^>]*checked/);
+    expect(page).not.toMatch(/name="stepParallel_3"[^>]*checked/);
+    expect(page).not.toContain('name="stepParallel_1"');
+  });
+
+  it('saving with the parallel checkbox marks the step as parallel for new orders', async () => {
+    const res = await post('/ustawienia/prace', {
+      ...editorFields({
+        stepCount: '3',
+        stepName_2: 'Analiza',
+        stepKind_2: 'own',
+        stepLimit_2: '2',
+        stepParallel_2: '1',
+        stepName_3: 'Zapłata',
+        stepKind_3: 'waiting',
+        stepLimit_3: '14',
+        payment: '3',
+      }),
+      person: 'Anna',
+    });
+    expect(res.statusCode).toBe(303);
+    const page = await get(res.headers.location as string);
+    expect(page).toMatch(/name="stepParallel_2"[^>]*checked/);
+  });
+
+  it('a payment step marked as parallel is refused with a readable message', async () => {
+    const res = await post('/ustawienia/prace', { ...editorFields({ stepParallel_2: '1' }), person: 'Anna' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('nie może iść równolegle');
+  });
+
   it('each step limit has − / + buttons (empty limit = no limit stays possible)', async () => {
     const page = await get('/ustawienia/prace/1');
     expect(page).toContain('aria-label="Zwiększ: Limit kroku 11 (dni roboczych)"');

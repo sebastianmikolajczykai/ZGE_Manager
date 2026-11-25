@@ -52,6 +52,7 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
       ['rodzaje-prac', 'Rodzaje prac'],
       ['dni-wolne', 'Dni wolne firmy'],
       ['wiadomosc', 'Wiadomość do klienta'],
+      ['kalendarz', 'Kalendarz Google'],
       ['osoby', 'Osoby'],
     ]) {
       expect(page).toContain(`href="#${id}"`);
@@ -70,6 +71,7 @@ describe('Ustawienia: kolory i przypomnienia (ekran)', () => {
       'rodzaje-prac',
       'dni-wolne',
       'wiadomosc',
+      'kalendarz',
       'osoby',
     ]);
     for (const [, attrs] of sections) {
